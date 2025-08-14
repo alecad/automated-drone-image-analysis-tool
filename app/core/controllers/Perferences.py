@@ -34,6 +34,7 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
+        self.demFolderLineEdit.setText(self.parent.settings_service.get_setting('DEMFolder') or '')
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 
@@ -46,6 +47,7 @@ class Preferences(QDialog, Ui_Preferences):
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
         self.droneSensorButton.clicked.connect(self._droneSensorButton_clicked)
+        self.demFolderButton.clicked.connect(self._select_dem_folder)
 
     def _update_max_aois(self):
         """Updates the maximum areas of interest setting based on the spinbox value."""
@@ -94,3 +96,9 @@ class Preferences(QDialog, Ui_Preferences):
         PickleHelper.force_reload()
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
+
+    def _select_dem_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select DEM Folder", "")
+        if folder:
+            self.parent.settings_service.set_setting('DEMFolder', folder)
+            self.demFolderLineEdit.setText(folder)

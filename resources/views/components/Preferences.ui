@@ -229,8 +229,8 @@
        </widget>
       </item>
       <item>
-       <widget class="QWidget" name="distanceWidget" native="true">
-        <layout class="QHBoxLayout" name="horizontalLayout_7">
+      <widget class="QWidget" name="distanceWidget" native="true">
+       <layout class="QHBoxLayout" name="horizontalLayout_7">
          <item>
           <widget class="QLabel" name="distanceLabel">
            <property name="font">
@@ -255,6 +255,45 @@
              <string>Feet</string>
             </property>
            </item>
+          </widget>
+         </item>
+       </layout>
+      </widget>
+     </item>
+      <item>
+       <widget class="QWidget" name="demWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_8">
+         <item>
+          <widget class="QLabel" name="demFolderLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>DEM Folder:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="demFolderLineEdit">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="demFolderButton">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>Browse</string>
+           </property>
           </widget>
          </item>
         </layout>

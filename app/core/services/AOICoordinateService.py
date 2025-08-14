@@ -1,9 +1,9 @@
 import math
 import numpy as np
 import piexif
-import rasterio
 
 from core.services.ImageService import ImageService
+from core.services.DEMService import DEMService
 from helpers.LocationInfo import LocationInfo
 from helpers.PickleHelper import PickleHelper
 
@@ -17,9 +17,8 @@ class AOICoordinateService:
 
     EARTH_RADIUS = 6378137.0  # meters
 
-    def __init__(self, dem_path):
-        self.dem = rasterio.open(dem_path)
-        self.elevation = self.dem.read(1)
+    def __init__(self, dem_dir):
+        self.dem_service = DEMService(dem_dir)
 
     def pixel_to_view(self, image_path, x, y):
         """Return detailed view information for a pixel coordinate.
@@ -91,9 +90,8 @@ class AOICoordinateService:
             alt = alt0 + u
 
             try:
-                r, c = self.dem.index(lon, lat)
-                dem_alt = float(self.elevation[r, c])
-            except Exception:
+                dem_alt = self.dem_service.elevation_at(lon, lat)
+            except ValueError:
                 prev = (d, lat, lon, alt, None)
                 continue
 

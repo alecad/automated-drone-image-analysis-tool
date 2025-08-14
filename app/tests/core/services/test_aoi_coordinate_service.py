@@ -15,7 +15,7 @@ def _haversine(lat1, lon1, lat2, lon2):
 
 
 def test_example_aoi_coordinate():
-    service = AOICoordinateService('app/dem/output_SRTMGL1.tif')
+    service = AOICoordinateService('app/dem')
     lat, lon = service.pixel_to_latlon('app/example_img/DJI_20240908125346_0045_V.JPG', 3420, 1180)
     expected_lat = 39.341413
     expected_lon = 8.404803
@@ -24,7 +24,7 @@ def test_example_aoi_coordinate():
 
 
 def test_second_aoi_coordinate():
-    service = AOICoordinateService('app/dem/output_SRTMGL1.tif')
+    service = AOICoordinateService('app/dem')
     lat, lon = service.pixel_to_latlon('app/example_img/DJI_20240908125346_0045_V.JPG', 572, 2740)
     expected_lat = 39.342239
     expected_lon = 8.403548
@@ -33,7 +33,7 @@ def test_second_aoi_coordinate():
 
 
 def test_pixel_to_view_and_kml(tmp_path):
-    service = AOICoordinateService('app/dem/output_SRTMGL1.tif')
+    service = AOICoordinateService('app/dem')
     view = service.pixel_to_view('app/example_img/DJI_20240908125346_0045_V.JPG', 3420, 1180)
     assert view is not None
     assert 0 <= view['heading'] <= 360

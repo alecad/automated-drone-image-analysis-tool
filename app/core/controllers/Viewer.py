@@ -28,6 +28,7 @@ from core.services.ZipBundleService import ZipBundleService
 from core.services.ImageService import ImageService
 from helpers.LocationInfo import LocationInfo
 from core.services.AOICoordinateService import AOICoordinateService
+from core.services.SettingsService import SettingsService
 from urllib.parse import quote_plus
 
 
@@ -75,8 +76,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self._skip_hidden_clicked)
 
-        dem_path = Path(__file__).resolve().parents[2] / 'dem' / 'output_SRTMGL1.tif'
-        self.aoi_coord_service = AOICoordinateService(dem_path)
+        self.settings_service = SettingsService()
+        dem_dir = self.settings_service.get_setting('DEMFolder')
+        if not dem_dir:
+            dem_dir = Path(__file__).resolve().parents[2] / 'dem'
+        self.aoi_coord_service = AOICoordinateService(dem_dir)
 
         # thumbnail config
         self.thumbnail_limit = 30
