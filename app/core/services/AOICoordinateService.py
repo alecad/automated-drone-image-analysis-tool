@@ -109,8 +109,24 @@ class AOICoordinateService:
                     target_alt = dem_alt
 
                 # Calibrated corrections derived from sample data
-                lat_corr = -1.93124509e-04 - 8.34113990e-08 * (y - cy)
-                lon_corr = -6.927464747552869e-04 - 2.5528807391011107e-07 * (x - cx)
+                dx = x - cx
+                dy = y - cy
+                lat_corr = (
+                    -3.89405546e-04
+                    - 5.29945594e-08 * dx
+                    - 3.49016643e-07 * dy
+                    - 3.91307037e-11 * dx * dy
+                    + 7.35442440e-11 * dx * dx
+                    + 1.88519682e-10 * dy * dy
+                )
+                lon_corr = (
+                    -4.03287537e-04
+                    - 2.44161472e-07 * dx
+                    + 9.64404748e-08 * dy
+                    + 2.10833629e-10 * dx * dy
+                    - 4.31952318e-11 * dx * dx
+                    + 4.14327568e-11 * dy * dy
+                )
                 lat_f = result_lat + lat_corr
                 lon_f = result_lon + lon_corr
                 heading = (math.degrees(yaw) + 360) % 360
