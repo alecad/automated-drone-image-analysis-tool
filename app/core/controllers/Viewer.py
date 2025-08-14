@@ -855,24 +855,38 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _open_in_earth(self):
         view = getattr(self, 'current_view_params', None)
-        if not view:
-            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
-            return
-        url = QUrl(f"https://earth.google.com/web/@{view['lat']},{view['lon']},{view['alt']}a,0d,{view['heading']}h,{view['tilt']}t,{view['range']}r")
+        if view:
+            url = QUrl(
+                f"https://earth.google.com/web/@{view['lat']},{view['lon']},{view['alt']}a,0d,{view['heading']}h,{view['tilt']}t,{view['range']}r"
+            )
+        else:
+            lat_lon = self._get_decimals_or_parse()
+            if not lat_lon:
+                self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+                return
+            lat, lon = lat_lon
+            url = QUrl(f"https://earth.google.com/web/@{lat},{lon},0a")
         QDesktopServices.openUrl(url)
         self._refresh_statusbar_message()
 
     def _download_kml_view(self):
         view = getattr(self, 'current_view_params', None)
-        if not view:
+        lat_lon = None if view else self._get_decimals_or_parse()
+        if not view and not lat_lon:
             self._show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
         file_name, _ = QFileDialog.getSaveFileName(self, "Save KML File", "", "KML files (*.kml)")
         if file_name:
             kml_service = KMLGeneratorService()
-            kml_service.generate_view_kml(
-                view['lat'], view['lon'], view['heading'], view['tilt'], view['range'], file_name
-            )
+            if view:
+                kml_service.generate_view_kml(
+                    view['lat'], view['lon'], view['heading'], view['tilt'], view['range'], file_name
+                )
+            else:
+                kml_service.add_points([
+                    {"name": "AOI", "lat": lat_lon[0], "long": lat_lon[1]}
+                ])
+                kml_service.save_kml(file_name)
 
     def _get_decimals_or_parse(self):
         # Prefer decimal coords captured from EXIF
