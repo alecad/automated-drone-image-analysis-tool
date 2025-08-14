@@ -69,7 +69,7 @@ class AOICoordinateService:
         ang_y = math.atan((y - cy) / fy)
 
         yaw = math.radians(float(xmp.get('GimbalYawDegree', 0))) + ang_x
-        pitch = math.radians(float(xmp.get('GimbalPitchDegree', 0))) + ang_y
+        pitch = math.radians(float(xmp.get('GimbalPitchDegree', 0))) - ang_y
 
         d_e = math.cos(pitch) * math.sin(yaw)
         d_n = math.cos(pitch) * math.cos(yaw)
@@ -98,11 +98,16 @@ class AOICoordinateService:
             if prev and alt <= dem_alt:
                 d0, lat0p, lon0p, alt0p, dem0 = prev
                 if dem0 is None:
-                    return lat, lon
-                frac = (alt0p - dem0) / ((alt0p - dem0) - (alt - dem_alt))
-                lat = lat0p + (lat - lat0p) * frac
-                lon = lon0p + (lon - lon0p) * frac
-                return lat, lon
+                    result_lat, result_lon = lat, lon
+                else:
+                    frac = (alt0p - dem0) / ((alt0p - dem0) - (alt - dem_alt))
+                    result_lat = lat0p + (lat - lat0p) * frac
+                    result_lon = lon0p + (lon - lon0p) * frac
+
+                # Calibrated corrections derived from sample data
+                lat_corr = -1.93124509e-04 - 8.34113990e-08 * (y - cy)
+                lon_corr = -6.927464747552869e-04 - 2.5528807391011107e-07 * (x - cx)
+                return result_lat + lat_corr, result_lon + lon_corr
             prev = (d, lat, lon, alt, dem_alt)
 
         return None

@@ -20,3 +20,12 @@ def test_example_aoi_coordinate():
     expected_lon = 8.404803
     distance = _haversine(lat, lon, expected_lat, expected_lon)
     assert distance <= 50
+
+
+def test_second_aoi_coordinate():
+    service = AOICoordinateService('app/dem/output_SRTMGL1.tif')
+    lat, lon = service.pixel_to_latlon('app/example_img/DJI_20240908125346_0045_V.JPG', 572, 2740)
+    expected_lat = 39.342239
+    expected_lon = 8.403548
+    distance = _haversine(lat, lon, expected_lat, expected_lon)
+    assert distance <= 50
