@@ -796,9 +796,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         act_tg.triggered.connect(self._share_telegram)
         menu.addAction(act_tg)
 
-        act_earth = QAction("Open in Google Earth", self)
-        act_earth.triggered.connect(self._open_in_earth)
-        menu.addAction(act_earth)
+        # act_earth = QAction("Open in Google Earth", self)
+        # act_earth.triggered.connect(self._open_in_earth)
+        # menu.addAction(act_earth)
 
         act_kml = QAction("Download KML (Google Earth)", self)
         act_kml.triggered.connect(self._download_kml_view)
