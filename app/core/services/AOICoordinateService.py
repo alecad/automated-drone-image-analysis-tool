@@ -25,7 +25,7 @@ class AOICoordinateService:
 
         Args:
             image_path (str): Path to the source image.
-            x (int): Pixel x coordinate (origin at left).
+            x (int): Pixel x coordinate (origin at right).
             y (int): Pixel y coordinate (origin at top).
 
         Returns:
@@ -66,6 +66,9 @@ class AOICoordinateService:
         cx = width / 2
         cy = height / 2
 
+        # input x is measured from the right edge
+        x = width - x
+
         ang_x = math.atan((x - cx) / fx)
         ang_y = math.atan((y - cy) / fy)
 
@@ -96,44 +99,35 @@ class AOICoordinateService:
                 continue
 
             if prev and alt <= dem_alt:
-                d0, lat0p, lon0p, alt0p, dem0 = prev
-                if dem0 is None:
-                    result_lat, result_lon = lat, lon
-                    dist = d
-                    target_alt = dem_alt
-                else:
-                    frac = (alt0p - dem0) / ((alt0p - dem0) - (alt - dem_alt))
-                    result_lat = lat0p + (lat - lat0p) * frac
-                    result_lon = lon0p + (lon - lon0p) * frac
-                    dist = d0 + (d - d0) * frac
-                    target_alt = dem_alt
-
-                # Calibrated corrections derived from sample data
-                dx = x - cx
-                dy = y - cy
-                lat_corr = (
-                    -3.89405546e-04
-                    - 5.29945594e-08 * dx
-                    - 3.49016643e-07 * dy
-                    - 3.91307037e-11 * dx * dy
-                    + 7.35442440e-11 * dx * dx
-                    + 1.88519682e-10 * dy * dy
-                )
-                lon_corr = (
-                    -4.03287537e-04
-                    - 2.44161472e-07 * dx
-                    + 9.64404748e-08 * dy
-                    + 2.10833629e-10 * dx * dy
-                    - 4.31952318e-11 * dx * dx
-                    + 4.14327568e-11 * dy * dy
-                )
-                lat_f = result_lat + lat_corr
-                lon_f = result_lon + lon_corr
+                # Refine intersection between previous and current step
+                d_low, lat_low, lon_low, alt_low, _ = prev
+                d_high = d
+                lat_high, lon_high = lat, lon
+                for _ in range(10):
+                    d_mid = (d_low + d_high) / 2
+                    e_mid = d_mid * d_e
+                    n_mid = d_mid * d_n
+                    u_mid = d_mid * d_u
+                    lat_mid = lat0 + (n_mid / self.EARTH_RADIUS) * 180 / math.pi
+                    lon_mid = lon0 + (e_mid / (self.EARTH_RADIUS * math.cos(math.radians(lat0)))) * 180 / math.pi
+                    alt_mid = alt0 + u_mid
+                    dem_mid = self.dem_service.elevation_at(lon_mid, lat_mid)
+                    if alt_mid > dem_mid:
+                        d_low = d_mid
+                    else:
+                        d_high = d_mid
+                        lat_high = lat_mid
+                        lon_high = lon_mid
+                        dem_alt = dem_mid
+                dist = d_high
+                result_lat = lat_high
+                result_lon = lon_high
+                target_alt = dem_alt
                 heading = (math.degrees(yaw) + 360) % 360
                 tilt = max(0.0, min(90.0, 90.0 + math.degrees(pitch)))
                 return {
-                    'lat': lat_f,
-                    'lon': lon_f,
+                    'lat': result_lat,
+                    'lon': result_lon,
                     'heading': heading,
                     'tilt': tilt,
                     'range': dist,
