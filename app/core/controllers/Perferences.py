@@ -1,10 +1,11 @@
 import os
 import shutil
 
-from PyQt5.QtWidgets import QDialog, QFileDialog
+from PyQt5.QtWidgets import QDialog, QFileDialog, QMessageBox
 from core.views.components.Preferences_ui import Ui_Preferences
 from core.services.SettingsService import SettingsService
 from helpers.PickleHelper import PickleHelper
+from core.services.AOICoordinateService import AOICoordinateService, AOICoordinateError
 
 
 class Preferences(QDialog, Ui_Preferences):
@@ -78,14 +79,31 @@ class Preferences(QDialog, Ui_Preferences):
 
     def _update_dem_path(self):
         """Updates the DEM directory path based on the line edit value."""
-        self.parent.settings_service.set_setting('DEMPath', self.demPathLineEdit.text())
+        path = self.demPathLineEdit.text()
+        if self._validate_dem_path(path):
+            self.parent.settings_service.set_setting('DEMPath', path)
+        else:
+            self.demPathLineEdit.setText("")
+            self.parent.settings_service.set_setting('DEMPath', "")
 
     def _dem_path_button_clicked(self):
         """Opens a directory dialog for selecting the DEM directory."""
         directory = QFileDialog.getExistingDirectory(self, "Select DEM Directory", self.demPathLineEdit.text())
         if directory:
-            self.demPathLineEdit.setText(directory)
-            self.parent.settings_service.set_setting('DEMPath', directory)
+            if self._validate_dem_path(directory):
+                self.demPathLineEdit.setText(directory)
+                self.parent.settings_service.set_setting('DEMPath', directory)
+
+    def _validate_dem_path(self, path: str) -> bool:
+        """Validate the DEM path ensuring at least one usable DEM file exists."""
+        if not path:
+            return True
+        try:
+            AOICoordinateService(path)
+            return True
+        except (AOICoordinateError, Exception):
+            QMessageBox.critical(self, "Invalid DEM Path", "The selected path does not contain valid DEM files.")
+            return False
 
     def _droneSensorButton_clicked(self):
         """

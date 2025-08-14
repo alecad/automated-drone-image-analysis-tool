@@ -1,6 +1,7 @@
 import math
+import pytest
 
-from core.services.AOICoordinateService import AOICoordinateService
+from core.services.AOICoordinateService import AOICoordinateService, AOICoordinateError
 
 
 def _haversine(lat1, lon1, lat2, lon2):
@@ -20,3 +21,8 @@ def test_example_aoi_coordinate():
     expected_lon = 8.404803
     distance = _haversine(lat, lon, expected_lat, expected_lon)
     assert distance <= 50
+
+
+def test_invalid_dem_path():
+    with pytest.raises(AOICoordinateError):
+        AOICoordinateService('nonexistent/path')
