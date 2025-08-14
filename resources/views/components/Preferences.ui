@@ -229,8 +229,8 @@
        </widget>
       </item>
       <item>
-       <widget class="QWidget" name="distanceWidget" native="true">
-        <layout class="QHBoxLayout" name="horizontalLayout_7">
+      <widget class="QWidget" name="distanceWidget" native="true">
+       <layout class="QHBoxLayout" name="horizontalLayout_7">
          <item>
           <widget class="QLabel" name="distanceLabel">
            <property name="font">
@@ -255,6 +255,48 @@
              <string>Feet</string>
             </property>
            </item>
+          </widget>
+         </item>
+       </layout>
+      </widget>
+     </item>
+      <item>
+       <widget class="QWidget" name="demPathWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_8">
+         <item>
+          <widget class="QLabel" name="demPathLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>DEM Directory:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="demPathLineEdit">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="demPathButton">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>Browse</string>
+           </property>
+           <property name="autoDefault">
+            <bool>false</bool>
+           </property>
           </widget>
          </item>
         </layout>

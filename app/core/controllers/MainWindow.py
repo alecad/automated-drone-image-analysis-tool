@@ -565,6 +565,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if not isinstance(distance_unit, str):
             self.settings_service.set_setting('DistanceUnit', 'Meters')
 
+        dem_path = self.settings_service.get_setting('DEMPath')
+        if not isinstance(dem_path, str) or dem_path == '':
+            default_dem = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dem')
+            self.settings_service.set_setting('DEMPath', default_dem)
+
         theme = self.settings_service.get_setting('Theme')
         if theme is None:
             self.settings_service.set_setting('Theme', 'Dark')

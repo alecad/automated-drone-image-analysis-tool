@@ -2,6 +2,7 @@ import math
 import numpy as np
 import piexif
 import rasterio
+from pathlib import Path
 
 from core.services.ImageService import ImageService
 from helpers.LocationInfo import LocationInfo
@@ -18,8 +19,15 @@ class AOICoordinateService:
     EARTH_RADIUS = 6378137.0  # meters
 
     def __init__(self, dem_path):
-        self.dem = rasterio.open(dem_path)
-        self.elevation = self.dem.read(1)
+        self.dems = []
+        dem_path = Path(dem_path)
+        if dem_path.is_file() and dem_path.suffix.lower() == '.tif':
+            dem = rasterio.open(dem_path)
+            self.dems.append((dem, dem.read(1), dem.bounds))
+        elif dem_path.is_dir():
+            for tif in dem_path.glob('*.tif'):
+                dem = rasterio.open(tif)
+                self.dems.append((dem, dem.read(1), dem.bounds))
 
     def pixel_to_latlon(self, image_path, x, y):
         """Return (lat, lon) for a pixel coordinate.
@@ -88,10 +96,13 @@ class AOICoordinateService:
             lon = lon0 + (e / (self.EARTH_RADIUS * math.cos(math.radians(lat0)))) * 180 / math.pi
             alt = alt0 + u
 
-            try:
-                r, c = self.dem.index(lon, lat)
-                dem_alt = float(self.elevation[r, c])
-            except Exception:
+            dem_alt = None
+            for dem, elevation, bounds in self.dems:
+                if bounds.left <= lon <= bounds.right and bounds.bottom <= lat <= bounds.top:
+                    r, c = dem.index(lon, lat)
+                    dem_alt = float(elevation[r, c])
+                    break
+            if dem_alt is None:
                 prev = (d, lat, lon, alt, None)
                 continue
 

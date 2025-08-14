@@ -34,6 +34,7 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
+        self.demPathLineEdit.setText(self.parent.settings_service.get_setting('DEMPath') or "")
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 
@@ -45,6 +46,8 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.currentTextChanged.connect(self._update_position_format)
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
+        self.demPathButton.clicked.connect(self._dem_path_button_clicked)
+        self.demPathLineEdit.editingFinished.connect(self._update_dem_path)
         self.droneSensorButton.clicked.connect(self._droneSensorButton_clicked)
 
     def _update_max_aois(self):
@@ -72,6 +75,17 @@ class Preferences(QDialog, Ui_Preferences):
     def _update_distance_unit(self):
         """Updates the distance unit setting based on the selected combobox value."""
         self.parent.settings_service.set_setting('DistanceUnit', self.distanceComboBox.currentText())
+
+    def _update_dem_path(self):
+        """Updates the DEM directory path based on the line edit value."""
+        self.parent.settings_service.set_setting('DEMPath', self.demPathLineEdit.text())
+
+    def _dem_path_button_clicked(self):
+        """Opens a directory dialog for selecting the DEM directory."""
+        directory = QFileDialog.getExistingDirectory(self, "Select DEM Directory", self.demPathLineEdit.text())
+        if directory:
+            self.demPathLineEdit.setText(directory)
+            self.parent.settings_service.set_setting('DEMPath', directory)
 
     def _droneSensorButton_clicked(self):
         """
