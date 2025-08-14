@@ -79,9 +79,12 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         settings_service = SettingsService()
         dem_dir = settings_service.get_setting('DEMPath')
-        if not dem_dir:
-            dem_dir = Path(__file__).resolve().parents[2] / 'dem'
-        self.aoi_coord_service = AOICoordinateService(dem_dir)
+        self.aoi_coord_service = None
+        if dem_dir:
+            try:
+                self.aoi_coord_service = AOICoordinateService(dem_dir)
+            except Exception as e:
+                self._show_error(str(e))
 
         # thumbnail config
         self.thumbnail_limit = 30
@@ -660,15 +663,27 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.main_image.zoomToArea(img.center, 6)
 
         image_path = self.images[self.current_image]['path']
-        try:
-            coord = self.aoi_coord_service.pixel_to_latlon(image_path, img.center[0], img.center[1])
-            if coord:
-                lat, lon = coord
-                self.messages['GPS Coordinates'] = f"{lat:.6f}, {lon:.6f}"
-                self.current_decimal_coords = (lat, lon)
-                self._refresh_statusbar_message()
-        except Exception:
-            pass
+        image_service = ImageService(image_path)
+        gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
+        if not gps:
+            return
+
+        coord = None
+        if self.aoi_coord_service:
+            try:
+                coord = self.aoi_coord_service.pixel_to_latlon(image_path, img.center[0], img.center[1])
+            except Exception as e:
+                self._show_error(str(e))
+
+        if coord:
+            lat, lon = coord
+        else:
+            lat = gps['latitude']
+            lon = gps['longitude']
+
+        self.messages['GPS Coordinates'] = f"{lat:.6f}, {lon:.6f}"
+        self.current_decimal_coords = (lat, lon)
+        self._refresh_statusbar_message()
 
     def _kmlButton_clicked(self):
         """Handles clicks on the Generate KML button to create a KML file."""

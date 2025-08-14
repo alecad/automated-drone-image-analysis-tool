@@ -9,6 +9,11 @@ from helpers.LocationInfo import LocationInfo
 from helpers.PickleHelper import PickleHelper
 
 
+class AOICoordinateError(Exception):
+    """Custom exception for AOI coordinate calculation errors."""
+    pass
+
+
 class AOICoordinateService:
     """Estimate geographic coordinates for pixels in a drone image.
 
@@ -21,6 +26,8 @@ class AOICoordinateService:
     def __init__(self, dem_path):
         self.dems = []
         dem_path = Path(dem_path)
+        if not dem_path.exists():
+            raise AOICoordinateError(f"DEM path '{dem_path}' does not exist")
         if dem_path.is_file() and dem_path.suffix.lower() == '.tif':
             dem = rasterio.open(dem_path)
             self.dems.append((dem, dem.read(1), dem.bounds))
@@ -28,6 +35,8 @@ class AOICoordinateService:
             for tif in dem_path.glob('*.tif'):
                 dem = rasterio.open(tif)
                 self.dems.append((dem, dem.read(1), dem.bounds))
+        if not self.dems:
+            raise AOICoordinateError(f"No DEM files found in '{dem_path}'")
 
     def pixel_to_latlon(self, image_path, x, y):
         """Return (lat, lon) for a pixel coordinate.
@@ -41,6 +50,9 @@ class AOICoordinateService:
             tuple[float, float] | None: latitude and longitude if the
                 projection intersects the DEM, otherwise ``None``.
         """
+        if not self.dems:
+            raise AOICoordinateError("No DEMs loaded")
+
         image_service = ImageService(image_path)
         exif = image_service.exif_data
         xmp = image_service.xmp_data
@@ -116,4 +128,4 @@ class AOICoordinateService:
                 return lat, lon
             prev = (d, lat, lon, alt, dem_alt)
 
-        return None
+        raise AOICoordinateError("AOI point outside DEM bounds")
