@@ -21,17 +21,18 @@ class AOICoordinateService:
         self.dem = rasterio.open(dem_path)
         self.elevation = self.dem.read(1)
 
-    def pixel_to_latlon(self, image_path, x, y):
-        """Return (lat, lon) for a pixel coordinate.
+    def pixel_to_view(self, image_path, x, y):
+        """Return detailed view information for a pixel coordinate.
 
         Args:
-            image_path (str): path to the source image.
-            x (int): pixel x coordinate (origin at left).
-            y (int): pixel y coordinate (origin at top).
+            image_path (str): Path to the source image.
+            x (int): Pixel x coordinate (origin at left).
+            y (int): Pixel y coordinate (origin at top).
 
         Returns:
-            tuple[float, float] | None: latitude and longitude if the
-                projection intersects the DEM, otherwise ``None``.
+            dict | None: Contains latitude, longitude, heading, tilt, range,
+            camera altitude and target altitude if the projection intersects
+            the DEM, otherwise ``None``.
         """
         image_service = ImageService(image_path)
         exif = image_service.exif_data
@@ -54,7 +55,8 @@ class AOICoordinateService:
 
         info = PickleHelper.get_drone_sensor_info()
         model = exif['0th'][piexif.ImageIFD.Model].decode('utf-8').strip()
-        row = info[(info['Model (Exif)'].str.contains(model)) & (info['Image Source (XMP)'] == 'WideCamera')]
+        row = info[(info['Model (Exif)'].str.contains(model)) &
+                   (info['Image Source (XMP)'] == 'WideCamera')]
         if row.empty:
             row = info[info['Model (Exif)'].str.contains(model)]
         sensor_w = float(row['sensor_w'].iloc[0])
@@ -99,15 +101,38 @@ class AOICoordinateService:
                 d0, lat0p, lon0p, alt0p, dem0 = prev
                 if dem0 is None:
                     result_lat, result_lon = lat, lon
+                    dist = d
+                    target_alt = dem_alt
                 else:
                     frac = (alt0p - dem0) / ((alt0p - dem0) - (alt - dem_alt))
                     result_lat = lat0p + (lat - lat0p) * frac
                     result_lon = lon0p + (lon - lon0p) * frac
+                    dist = d0 + (d - d0) * frac
+                    target_alt = dem_alt
 
                 # Calibrated corrections derived from sample data
                 lat_corr = -1.93124509e-04 - 8.34113990e-08 * (y - cy)
                 lon_corr = -6.927464747552869e-04 - 2.5528807391011107e-07 * (x - cx)
-                return result_lat + lat_corr, result_lon + lon_corr
+                lat_f = result_lat + lat_corr
+                lon_f = result_lon + lon_corr
+                heading = (math.degrees(yaw) + 360) % 360
+                tilt = max(0.0, min(90.0, 90.0 + math.degrees(pitch)))
+                return {
+                    'lat': lat_f,
+                    'lon': lon_f,
+                    'heading': heading,
+                    'tilt': tilt,
+                    'range': dist,
+                    'alt': alt0,
+                    'target_alt': target_alt,
+                }
             prev = (d, lat, lon, alt, dem_alt)
 
+        return None
+
+    def pixel_to_latlon(self, image_path, x, y):
+        """Return only latitude and longitude for a pixel coordinate."""
+        view = self.pixel_to_view(image_path, x, y)
+        if view:
+            return view['lat'], view['lon']
         return None

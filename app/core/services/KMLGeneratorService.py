@@ -33,6 +33,28 @@ class KMLGeneratorService:
         """
         self.kml.save(path)
 
+    def generate_view_kml(self, lat, lon, heading, tilt, range_, path):
+        """Generate a KML file with a single point and camera view.
+
+        Args:
+            lat (float): Latitude of the target point.
+            lon (float): Longitude of the target point.
+            heading (float): Camera heading in degrees.
+            tilt (float): Camera tilt in degrees.
+            range_ (float): Distance from the camera to the target.
+            path (str): Output file path for the KML document.
+        """
+        kml = simplekml.Kml()
+        pnt = kml.newpoint(coords=[(lon, lat)])
+        pnt.lookat = simplekml.LookAt(
+            longitude=lon,
+            latitude=lat,
+            range=range_,
+            tilt=tilt,
+            heading=heading,
+        )
+        kml.save(path)
+
     def generate_kml_export(self, images, output_path):
         """
         Filters and extracts GPS coordinates from a list of images, then generates and saves a KML file.

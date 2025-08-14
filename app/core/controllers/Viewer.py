@@ -1,3 +1,4 @@
+# flake8: noqa
 # Set environment variable to avoid numpy._core issues - MUST be first
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
@@ -103,6 +104,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         # context menu on statusbar for coordinates
         self.current_decimal_coords = None
+        self.current_view_params = None
         self.statusbar.setContextMenuPolicy(Qt.CustomContextMenu)
         self.statusbar.customContextMenuRequested.connect(self._on_statusbar_context_menu)
 
@@ -655,11 +657,12 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         image_path = self.images[self.current_image]['path']
         try:
-            coord = self.aoi_coord_service.pixel_to_latlon(image_path, img.center[0], img.center[1])
-            if coord:
-                lat, lon = coord
+            view = self.aoi_coord_service.pixel_to_view(image_path, img.center[0], img.center[1])
+            if view:
+                lat, lon = view['lat'], view['lon']
                 self.messages['GPS Coordinates'] = f"{lat:.6f}, {lon:.6f}"
                 self.current_decimal_coords = (lat, lon)
+                self.current_view_params = view
                 self._refresh_statusbar_message()
         except Exception:
             pass
@@ -793,6 +796,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         act_tg.triggered.connect(self._share_telegram)
         menu.addAction(act_tg)
 
+        act_earth = QAction("Open in Google Earth", self)
+        act_earth.triggered.connect(self._open_in_earth)
+        menu.addAction(act_earth)
+
+        act_kml = QAction("Download KML (Google Earth)", self)
+        act_kml.triggered.connect(self._download_kml_view)
+        menu.addAction(act_kml)
+
         global_pos = self.statusbar.mapToGlobal(pos)
         menu.exec_(global_pos)
         # Restore status text if Qt cleared it while the menu was open
@@ -841,6 +852,27 @@ class Viewer(QMainWindow, Ui_Viewer):
         tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}') }"
         QDesktopServices.openUrl(QUrl(tg_url))
         self._refresh_statusbar_message()
+
+    def _open_in_earth(self):
+        view = getattr(self, 'current_view_params', None)
+        if not view:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+        url = QUrl(f"https://earth.google.com/web/@{view['lat']},{view['lon']},{view['alt']}a,0d,{view['heading']}h,{view['tilt']}t,{view['range']}r")
+        QDesktopServices.openUrl(url)
+        self._refresh_statusbar_message()
+
+    def _download_kml_view(self):
+        view = getattr(self, 'current_view_params', None)
+        if not view:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save KML File", "", "KML files (*.kml)")
+        if file_name:
+            kml_service = KMLGeneratorService()
+            kml_service.generate_view_kml(
+                view['lat'], view['lon'], view['heading'], view['tilt'], view['range'], file_name
+            )
 
     def _get_decimals_or_parse(self):
         # Prefer decimal coords captured from EXIF
