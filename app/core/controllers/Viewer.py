@@ -26,6 +26,7 @@ from core.services.PdfGeneratorService import PdfGeneratorService
 from core.services.ZipBundleService import ZipBundleService
 from core.services.ImageService import ImageService
 from helpers.LocationInfo import LocationInfo
+from core.services.AOICoordinateService import AOICoordinateService
 from urllib.parse import quote_plus
 
 
@@ -72,6 +73,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.show_hidden = show_hidden
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self._skip_hidden_clicked)
+
+        dem_path = Path(__file__).resolve().parents[2] / 'dem' / 'output_SRTMGL1.tif'
+        self.aoi_coord_service = AOICoordinateService(dem_path)
 
         # thumbnail config
         self.thumbnail_limit = 30
@@ -648,6 +652,17 @@ class Viewer(QMainWindow, Ui_Viewer):
             img (QtImageViewer): The clicked thumbnail image viewer.
         """
         self.main_image.zoomToArea(img.center, 6)
+
+        image_path = self.images[self.current_image]['path']
+        try:
+            coord = self.aoi_coord_service.pixel_to_latlon(image_path, img.center[0], img.center[1])
+            if coord:
+                lat, lon = coord
+                self.messages['GPS Coordinates'] = f"{lat:.6f}, {lon:.6f}"
+                self.current_decimal_coords = (lat, lon)
+                self._refresh_statusbar_message()
+        except Exception:
+            pass
 
     def _kmlButton_clicked(self):
         """Handles clicks on the Generate KML button to create a KML file."""
