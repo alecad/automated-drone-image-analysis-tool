@@ -7,6 +7,8 @@ from PIL import Image, UnidentifiedImageError
 import traceback
 import math
 import numpy as np
+import tempfile
+import simplekml
 from pathlib import Path
 from collections import UserDict, OrderedDict
 from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
@@ -785,6 +787,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         act_maps.triggered.connect(self._open_in_maps)
         menu.addAction(act_maps)
 
+        act_earth = QAction("View in Google Earth", self)
+        act_earth.triggered.connect(self._view_in_google_earth)
+        menu.addAction(act_earth)
+
         act_wa = QAction("Send via WhatsApp", self)
         act_wa.triggered.connect(self._share_whatsapp)
         menu.addAction(act_wa)
@@ -817,6 +823,55 @@ class Viewer(QMainWindow, Ui_Viewer):
         lat, lon = lat_lon
         url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
         QDesktopServices.openUrl(url)
+        self._refresh_statusbar_message()
+
+    def _view_in_google_earth(self):
+        lat_lon = self._get_decimals_or_parse()
+        if not lat_lon:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+        aoi_lat, aoi_lon = lat_lon
+        image_path = self.images[self.current_image]['path']
+        try:
+            image_service = ImageService(image_path)
+            gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
+            if not gps or 'latitude' not in gps or 'longitude' not in gps:
+                self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+                return
+            drone_lat = gps['latitude']
+            drone_lon = gps['longitude']
+            try:
+                alt = float(image_service.xmp_data.get('AbsoluteAltitude'))
+            except (TypeError, ValueError):
+                alt = 0
+            try:
+                yaw = float(image_service.xmp_data.get('GimbalYawDegree', 0))
+            except (TypeError, ValueError):
+                yaw = 0
+            try:
+                pitch = float(image_service.xmp_data.get('GimbalPitchDegree', 0))
+            except (TypeError, ValueError):
+                pitch = 0
+            tilt = max(0, min(180, 90 + pitch))
+        except Exception:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+
+        kml = simplekml.Kml()
+        kml.document.lookat = simplekml.LookAt(
+            range=0,
+            longitude=drone_lon,
+            latitude=drone_lat,
+            altitude=alt,
+            heading=yaw,
+            tilt=tilt,
+            altitudemode=simplekml.AltitudeMode.absolute,
+        )
+        kml.newpoint(name="AOI", coords=[(aoi_lon, aoi_lat)])
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".kml")
+        kml.save(tmp.name)
+        tmp.close()
+        QDesktopServices.openUrl(QUrl.fromLocalFile(tmp.name))
         self._refresh_statusbar_message()
 
     def _share_whatsapp(self):
