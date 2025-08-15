@@ -648,7 +648,35 @@ class Viewer(QMainWindow, Ui_Viewer):
             y (int): Y coordinate of the cursor.
             img (QtImageViewer): The clicked thumbnail image viewer.
         """
+        # Zoom on AOI
         self.main_image.zoomToArea(img.center, 6)
+
+        # Compute AOI geolocation and update footer
+        try:
+            image = self.images[self.current_image]
+            image_service = ImageService(image['path'])
+            geo = image_service.compute_aoi_geolocation(img.center)
+            if geo is not None:
+                lat, lon = geo['lat'], geo['lon']
+                # Format according to setting
+                if self.position_format == 'Lat/Long - Decimal Degrees':
+                    coord_text = f"{lat}, {lon}"
+                elif self.position_format == 'Lat/Long - Degrees, Minutes, Seconds':
+                    dms = LocationInfo.convert_decimal_to_dms(lat, lon)
+                    coord_text = (
+                        f"{dms['latitude']['degrees']}°{dms['latitude']['minutes']}'{dms['latitude']['seconds']}\"{dms['latitude']['reference']} "
+                        f"{dms['longitude']['degrees']}°{dms['longitude']['minutes']}'{dms['longitude']['seconds']}\"{dms['longitude']['reference']}"
+                    )
+                elif self.position_format == 'UTM':
+                    utm = LocationInfo.convert_degrees_to_utm(lat, lon)
+                    coord_text = f"{utm['zone_number']}{utm['zone_letter']} {utm['easting']} {utm['northing']}"
+                else:
+                    coord_text = f"{lat}, {lon}"
+
+                self.messages['GPS Coordinates'] = coord_text
+                self.current_decimal_coords = (lat, lon)
+        except Exception:
+            pass
 
     def _kmlButton_clicked(self):
         """Handles clicks on the Generate KML button to create a KML file."""

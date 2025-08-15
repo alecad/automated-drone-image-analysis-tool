@@ -64,3 +64,24 @@ be generated like this
 --------------------
 
 If you are interesting in contributing to this project by either enhancing an existing capability or adding new features/algorithms please reach out to us at charlie.grove@texsar.org
+
+## AOI Geolocation via DEM (SRTM)
+
+The viewer now computes the geographic position of an AOI by intersecting the camera ray (from EXIF/XMP pose and intrinsics) with a terrain model (SRTM GL1/GL3) at ~30m resolution. When you click an AOI in the left pane, the status bar coordinates update with the computed point, formatted according to the selected coordinate format.
+
+Notes:
+- Horizontal CRS: WGS84 [EPSG:4326]
+- Vertical: EGM96 geoid approximation (as provided by SRTM data source)
+- Expected accuracy: typically 10–30 m planimetric under good metadata; depends on DEM, camera pose, and calibration.
+
+### Dependencies
+- `srtm.py` is used to fetch/query SRTM elevations. It downloads tiles on demand and caches locally.
+
+### Tests
+Run the unit tests:
+
+```bash
+pytest -q
+```
+
+A unit test validates nadir intersection over a flat DEM.

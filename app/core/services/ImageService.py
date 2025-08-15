@@ -11,6 +11,7 @@ from core.services.GSDService import GSDService
 from helpers.MetaDataHelper import MetaDataHelper
 from helpers.PickleHelper import PickleHelper
 from helpers.LocationInfo import LocationInfo
+from core.services.TerrainIntersectionService import compute_ground_intersection, SRTMProvider
 
 
 class ImageService:
@@ -340,3 +341,81 @@ class ImageService:
             cv2.circle(image_copy, center, r, bgr, thickness=2)
 
         return image_copy
+
+    def compute_aoi_geolocation(self, aoi_center_xy):
+        """
+        Compute WGS84 lat, lon, alt for a given AOI pixel center by intersecting
+        the camera ray with SRTM DEM.
+
+        Args:
+            aoi_center_xy (tuple[int,int]): pixel coordinates (x, y) in image space.
+
+        Returns:
+            dict or None: { 'lat': float, 'lon': float, 'alt_m': float } or None if unavailable.
+        """
+        try:
+            # Camera pose
+            gps = LocationInfo.get_gps(exif_data=self.exif_data)
+            if not gps:
+                return None
+            camera_lat = gps['latitude']
+            camera_lon = gps['longitude']
+
+            # Altitude preference: AGL + DEM vs absolute GPS altitude; use GPS altitude if available
+            camera_alt = self.get_asl_altitude('m')
+            if camera_alt is None:
+                rel = self.get_relative_altitude('m')
+                if rel is None:
+                    return None
+                # Approximate ASL = DEM under drone + AGL
+                dem = SRTMProvider()
+                dem_h = dem.get_elevation(camera_lat, camera_lon) or 0.0
+                camera_alt = float(dem_h) + float(rel)
+
+            # Orientation
+            yaw = self.get_drone_orientation() or 0.0
+            gimbal_yaw, gimbal_pitch = self.get_gimbal_orientation()
+            # Prefer gimbal yaw if present; DJI often encodes optical axis as gimbal yaw
+            if gimbal_yaw is not None:
+                yaw = gimbal_yaw
+            pitch = gimbal_pitch if gimbal_pitch is not None else 0.0
+
+            # Camera intrinsics
+            image_width = self.exif_data["Exif"].get(piexif.ExifIFD.PixelXDimension)
+            image_height = self.exif_data["Exif"].get(piexif.ExifIFD.PixelYDimension)
+            if image_width is None or image_height is None:
+                return None
+            focal = self.exif_data["Exif"].get(piexif.ExifIFD.FocalLength)
+            if focal is None:
+                return None
+            focal_mm = float(focal[0]) / float(focal[1])
+
+            camera_info = self._get_camera_info()
+            if camera_info is None or camera_info.empty:
+                return None
+            sensor_w_mm = float(camera_info['sensor_w'].iloc[0])
+            sensor_h_mm = float(camera_info['sensor_h'].iloc[0])
+
+            x, y = aoi_center_xy
+            res = compute_ground_intersection(
+                camera_lat=camera_lat,
+                camera_lon=camera_lon,
+                camera_alt_m=camera_alt,
+                pixel_x=float(x),
+                pixel_y=float(y),
+                image_width_px=float(image_width),
+                image_height_px=float(image_height),
+                focal_length_mm=focal_mm,
+                sensor_w_mm=sensor_w_mm,
+                sensor_h_mm=sensor_h_mm,
+                yaw_deg=float(yaw),
+                pitch_deg=float(pitch),
+                roll_deg=0.0,
+                dem_provider=SRTMProvider(),
+            )
+            if res is None:
+                return None
+            lat, lon, alt = res
+            return {'lat': round(lat, 7), 'lon': round(lon, 7), 'alt_m': float(alt)}
+        except Exception:
+            return None

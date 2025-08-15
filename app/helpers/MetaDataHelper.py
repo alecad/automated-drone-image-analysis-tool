@@ -7,6 +7,8 @@ import platform
 import re
 import struct
 import xml.etree.ElementTree as ET
+import json
+import numpy as np
 
 from helpers.PickleHelper import PickleHelper
 
@@ -176,6 +178,41 @@ class MetaDataHelper:
             et.set_tags([file_path], tags=tags, params=["-overwrite_original"])
             et.terminate()
 
+    # -------------------- Thermal temperature helpers (compat aliases) --------------------
+    @staticmethod
+    def transfer_temperature_data(data, destination_file):
+        """
+        Store numeric array as JSON in XMP Notes tag using ExifToolHelper.
+        Matches tests expectations.
+        """
+        # Ensure Python list for JSON serialization
+        if isinstance(data, np.ndarray):
+            payload = json.dumps(data.tolist())
+        else:
+            payload = json.dumps(list(data))
+        with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
+            et.set_tags([destination_file], tags={"Notes": payload}, params=["-P", "-overwrite_original"])
+            et.terminate()
+
+    @staticmethod
+    def get_temperature_data(file_path):
+        """
+        Read XMP Notes tag and parse numeric JSON into numpy array.
+        """
+        with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
+            tags = et.get_tags([file_path], tags=['Notes'])
+            et.terminate()
+        if not tags:
+            return None
+        raw = tags[0].get('XMP:Notes')
+        if raw is None:
+            return None
+        try:
+            data = json.loads(raw)
+            return np.asarray(data)
+        except Exception:
+            return None
+
     @staticmethod
     def add_gps_data(file_path, lat, lng, alt, rel_alt=0):
         """
@@ -327,6 +364,16 @@ class MetaDataHelper:
             return MetaDataHelper._parse_xmp_xml(xmp_decode) if parse else xmp_decode
         except Exception:
             return None
+
+    @staticmethod
+    def embed_xmp(xmp_xml: str, destination_file: str):
+        """
+        Compatibility alias: embed provided XMP packet into the destination image.
+        """
+        if not isinstance(xmp_xml, (str, bytes)):
+            return
+        data = xmp_xml.encode('utf-8') if isinstance(xmp_xml, str) else xmp_xml
+        MetaDataHelper.embed_xmp_xml(data, destination_file)
 
     @staticmethod
     def extract_xmp(image_path):

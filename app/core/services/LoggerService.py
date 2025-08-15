@@ -16,28 +16,42 @@ class LoggerService:
 
         Creates a log file in a platform-specific directory. If the directory does not exist, it is created.
         """
+        app_path = None
         if platform.system() == 'Windows':
             home_path = os.path.expanduser("~")
-            app_path = home_path + '/AppData/Roaming/ADIAT/'
+            app_path = os.path.join(home_path, 'AppData', 'Roaming', 'ADIAT') + os.sep
             if not os.path.exists(app_path):
-                os.makedirs(app_path)
+                os.makedirs(app_path, exist_ok=True)
         elif sys.platform == "darwin":
             home_path = os.path.expanduser("~")
-            app_path = home_path + '/AppData/Roaming/ADIAT/'
+            app_path = os.path.join(home_path, 'AppData', 'Roaming', 'ADIAT') + os.sep
             if not os.path.exists(app_path):
-                os.makedirs(app_path)
+                os.makedirs(app_path, exist_ok=True)
+        else:
+            # Linux and others – use XDG config home or ~/.config/ADIAT
+            home_path = os.path.expanduser("~")
+            xdg = os.environ.get('XDG_CONFIG_HOME')
+            base = xdg if xdg else os.path.join(home_path, '.config')
+            app_path = os.path.join(base, 'ADIAT') + os.sep
+            if not os.path.exists(app_path):
+                os.makedirs(app_path, exist_ok=True)
 
-        log_path = app_path + 'adiat_logs.txt'
         self.logger = logging.getLogger(__name__)
         stdoutHandler = logging.StreamHandler(stream=sys.stdout)
-        fileHandler = logging.FileHandler(log_path)
         stdoutFmt = logging.Formatter(
             "%(name)s: %(asctime)s | %(levelname)s | %(process)d >>> %(message)s"
         )
         stdoutHandler.setFormatter(stdoutFmt)
-        fileHandler.setFormatter(stdoutFmt)
         self.logger.addHandler(stdoutHandler)
-        self.logger.addHandler(fileHandler)
+
+        # File handler is optional if path is not writable
+        try:
+            log_path = os.path.join(app_path or '', 'adiat_logs.txt')
+            fileHandler = logging.FileHandler(log_path)
+            fileHandler.setFormatter(stdoutFmt)
+            self.logger.addHandler(fileHandler)
+        except Exception:
+            pass
 
     def info(self, message):
         """
