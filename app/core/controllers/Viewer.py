@@ -26,6 +26,8 @@ from core.services.XmlService import XmlService
 from core.services.PdfGeneratorService import PdfGeneratorService
 from core.services.ZipBundleService import ZipBundleService
 from core.services.ImageService import ImageService
+from core.services.AOIGeolocationService import AOIGeolocationService
+from core.services.SettingsService import SettingsService
 from helpers.LocationInfo import LocationInfo
 from urllib.parse import quote_plus
 
@@ -107,6 +109,13 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.scaleBar = ScaleBarWidget()
 
         # ---- load everything ----
+        self.settings_service = SettingsService()
+        self.dem_folder = self.settings_service.get_setting('DEMFolder')
+        self.aoi_geo_service = AOIGeolocationService(self.dem_folder) if self.dem_folder else None
+
+        self.aoiListWidget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.aoiListWidget.customContextMenuRequested.connect(self._on_aoi_context_menu)
+
         self._load_images()
         self._initialize_thumbnails()
         self._load_thumbnails_in_range(0, self.thumbnail_limit)
@@ -470,6 +479,14 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.aoiListWidget.addItem(listItem)
             self.aoiListWidget.setItemWidget(listItem, container)
             self.aoiListWidget.setSpacing(5)
+
+            coords = None
+            if self.aoi_geo_service:
+                result = self.aoi_geo_service.compute_aoi_coordinate(self.images[self.current_image]['path'], center)
+                if result:
+                    coords = (result[0], result[1])
+
+            listItem.setData(Qt.UserRole, {'coords': coords, 'center': center})
             self.highlights.append(highlight)
             highlight.leftMouseButtonPressed.connect(self._area_of_interest_click)
             count += 1
@@ -788,6 +805,44 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Restore status text if Qt cleared it while the menu was open
         self._refresh_statusbar_message()
 
+    def _on_aoi_context_menu(self, pos):
+        item = self.aoiListWidget.itemAt(pos)
+        if not item:
+            return
+        data = item.data(Qt.UserRole)
+        if not data or not data.get('coords'):
+            return
+        coords = data['coords']
+        center = data['center']
+        coord_text = f"{coords[0]}, {coords[1]}"
+
+        menu = QMenu(self)
+        menu.setFont(self.statusbar.font())
+
+        act_copy = QAction("Copy coordinates", self)
+        act_copy.triggered.connect(lambda: self._copy_coords_to_clipboard(coord_text))
+        menu.addAction(act_copy)
+
+        act_maps = QAction("Open in Google Maps", self)
+        act_maps.triggered.connect(lambda: self._open_in_maps(coords))
+        menu.addAction(act_maps)
+
+        act_earth = QAction("View in Google Earth", self)
+        name = f"{center[0]}_{center[1]}"
+        act_earth.triggered.connect(lambda: self._open_in_earth(coords, name))
+        menu.addAction(act_earth)
+
+        act_wa = QAction("Send via WhatsApp", self)
+        act_wa.triggered.connect(lambda: self._share_whatsapp(coords))
+        menu.addAction(act_wa)
+
+        act_tg = QAction("Send via Telegram", self)
+        act_tg.triggered.connect(lambda: self._share_telegram(coords))
+        menu.addAction(act_tg)
+
+        global_pos = self.aoiListWidget.mapToGlobal(pos)
+        menu.exec_(global_pos)
+
     def _copy_coords_to_clipboard(self, coord_text=None):
         from PyQt5.QtWidgets import QApplication
         if coord_text is None:
@@ -799,23 +854,24 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._show_toast("Coordinates copied", 3000, color="#00C853")
         self._refresh_statusbar_message()
 
-    def _open_in_maps(self):
-        lat_lon = self._get_decimals_or_parse()
-        if not lat_lon:
+    def _open_in_maps(self, coords=None):
+        if coords is None:
+            coords = self._get_decimals_or_parse()
+        if not coords:
             self._show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
-        lat, lon = lat_lon
+        lat, lon = coords
         url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
         QDesktopServices.openUrl(url)
         self._refresh_statusbar_message()
 
-    def _open_in_earth(self):
-        lat_lon = self._get_decimals_or_parse()
-        if not lat_lon:
+    def _open_in_earth(self, target_coords=None, target_name=None):
+        photo_coords = self._get_decimals_or_parse()
+        if not photo_coords:
             self._show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
 
-        lat, lon = lat_lon
+        lat, lon = photo_coords
         image_path = self.images[self.current_image]['path']
         image_service = ImageService(image_path)
         yaw, pitch = image_service.get_gimbal_orientation()
@@ -859,6 +915,16 @@ class Viewer(QMainWindow, Ui_Viewer):
             "      <name>Photo Location</name>\n"
             f"      <Point><coordinates>{lon},{lat},0</coordinates></Point>\n"
             "    </Placemark>\n"
+        )
+        if target_name and target_coords is not None:
+            tlat, tlon = target_coords
+            kml += (
+                "    <Placemark>\n"
+                f"      <name>{target_name}</name>\n"
+                f"      <Point><coordinates>{tlon},{tlat},0</coordinates></Point>\n"
+                "    </Placemark>\n"
+            )
+        kml += (
             "  </Document>\n"
             "</kml>\n"
         )
@@ -870,24 +936,26 @@ class Viewer(QMainWindow, Ui_Viewer):
         QDesktopServices.openUrl(QUrl.fromLocalFile(kml_path))
         self._refresh_statusbar_message()
 
-    def _share_whatsapp(self):
-        lat_lon = self._get_decimals_or_parse()
-        if not lat_lon:
+    def _share_whatsapp(self, coords=None):
+        if coords is None:
+            coords = self._get_decimals_or_parse()
+        if not coords:
             self._show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
-        lat, lon = lat_lon
+        lat, lon = coords
         maps = f"https://www.google.com/maps?q={lat},{lon}"
         text = f"Coordinate: {lat}, {lon} — {maps}"
         wa_url = f"https://wa.me/?text={quote_plus(text)}"
         QDesktopServices.openUrl(QUrl(wa_url))
         self._refresh_statusbar_message()
 
-    def _share_telegram(self):
-        lat_lon = self._get_decimals_or_parse()
-        if not lat_lon:
+    def _share_telegram(self, coords=None):
+        if coords is None:
+            coords = self._get_decimals_or_parse()
+        if not coords:
             self._show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
-        lat, lon = lat_lon
+        lat, lon = coords
         maps = f"https://www.google.com/maps?q={lat},{lon}"
         tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}') }"
         QDesktopServices.openUrl(QUrl(tg_url))

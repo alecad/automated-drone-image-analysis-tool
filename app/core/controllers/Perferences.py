@@ -34,6 +34,7 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
+        self.demLineEdit.setText(self.parent.settings_service.get_setting('DEMFolder') or "")
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 
@@ -45,6 +46,8 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.currentTextChanged.connect(self._update_position_format)
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
+        self.demLineEdit.textChanged.connect(self._update_dem_folder)
+        self.demBrowseButton.clicked.connect(self._browse_dem_folder)
         self.droneSensorButton.clicked.connect(self._droneSensorButton_clicked)
 
     def _update_max_aois(self):
@@ -72,6 +75,15 @@ class Preferences(QDialog, Ui_Preferences):
     def _update_distance_unit(self):
         """Updates the distance unit setting based on the selected combobox value."""
         self.parent.settings_service.set_setting('DistanceUnit', self.distanceComboBox.currentText())
+
+    def _update_dem_folder(self):
+        """Updates the DEM folder path setting based on the line edit value."""
+        self.parent.settings_service.set_setting('DEMFolder', self.demLineEdit.text())
+
+    def _browse_dem_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select DEM Folder", "")
+        if folder:
+            self.demLineEdit.setText(folder)
 
     def _droneSensorButton_clicked(self):
         """

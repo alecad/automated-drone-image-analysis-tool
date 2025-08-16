@@ -229,6 +229,40 @@
        </widget>
       </item>
       <item>
+       <widget class="QWidget" name="demWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_dem">
+         <item>
+          <widget class="QLabel" name="demLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>DEM Folder:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="demLineEdit">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="demBrowseButton">
+           <property name="text">
+            <string>Browse</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
        <widget class="QWidget" name="distanceWidget" native="true">
         <layout class="QHBoxLayout" name="horizontalLayout_7">
          <item>

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\adiat_ai\resources/views/components\Preferences.ui'
+# Form implementation generated from reading ui file 'resources/views/components/Preferences.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -140,6 +140,26 @@ class Ui_Preferences(object):
         self.temperatureComboBox.addItem("")
         self.horizontalLayout_5.addWidget(self.temperatureComboBox)
         self.verticalLayout_2.addWidget(self.TemperatureWidget)
+        self.demWidget = QtWidgets.QWidget(self.mainWidget)
+        self.demWidget.setObjectName("demWidget")
+        self.horizontalLayout_dem = QtWidgets.QHBoxLayout(self.demWidget)
+        self.horizontalLayout_dem.setObjectName("horizontalLayout_dem")
+        self.demLabel = QtWidgets.QLabel(self.demWidget)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.demLabel.setFont(font)
+        self.demLabel.setObjectName("demLabel")
+        self.horizontalLayout_dem.addWidget(self.demLabel)
+        self.demLineEdit = QtWidgets.QLineEdit(self.demWidget)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.demLineEdit.setFont(font)
+        self.demLineEdit.setObjectName("demLineEdit")
+        self.horizontalLayout_dem.addWidget(self.demLineEdit)
+        self.demBrowseButton = QtWidgets.QPushButton(self.demWidget)
+        self.demBrowseButton.setObjectName("demBrowseButton")
+        self.horizontalLayout_dem.addWidget(self.demBrowseButton)
+        self.verticalLayout_2.addWidget(self.demWidget)
         self.distanceWidget = QtWidgets.QWidget(self.mainWidget)
         self.distanceWidget.setObjectName("distanceWidget")
         self.horizontalLayout_7 = QtWidgets.QHBoxLayout(self.distanceWidget)
@@ -213,6 +233,8 @@ class Ui_Preferences(object):
         self.temperatureLabel.setText(_translate("Preferences", "Temperature Unit:"))
         self.temperatureComboBox.setItemText(0, _translate("Preferences", "Fahrenheit"))
         self.temperatureComboBox.setItemText(1, _translate("Preferences", "Celsius"))
+        self.demLabel.setText(_translate("Preferences", "DEM Folder:"))
+        self.demBrowseButton.setText(_translate("Preferences", "Browse"))
         self.distanceLabel.setText(_translate("Preferences", "Distance Unit:"))
         self.distanceComboBox.setItemText(0, _translate("Preferences", "Meters"))
         self.distanceComboBox.setItemText(1, _translate("Preferences", "Feet"))
