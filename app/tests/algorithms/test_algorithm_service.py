@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock, mock_open
-from app.algorithms.Algorithm import AlgorithmService
+from app.algorithms.AlgorithmService import AlgorithmService
 import cv2
 import numpy as np
 from pathlib import Path

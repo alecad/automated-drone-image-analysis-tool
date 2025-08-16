@@ -3,3 +3,5 @@ qt5-tools
 PyInstaller
 pytest-qt
 flake8
+rasterio
+pyproj

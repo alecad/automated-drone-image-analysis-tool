@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\adiat_ai\resources/views/components\Preferences.ui'
+# Form implementation generated from reading ui file 'resources/views/components/Preferences.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -156,6 +156,30 @@ class Ui_Preferences(object):
         self.distanceComboBox.addItem("")
         self.horizontalLayout_7.addWidget(self.distanceComboBox)
         self.verticalLayout_2.addWidget(self.distanceWidget)
+        self.demWidget = QtWidgets.QWidget(self.mainWidget)
+        self.demWidget.setObjectName("demWidget")
+        self.horizontalLayout_dem = QtWidgets.QHBoxLayout(self.demWidget)
+        self.horizontalLayout_dem.setObjectName("horizontalLayout_dem")
+        self.demLabel = QtWidgets.QLabel(self.demWidget)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.demLabel.setFont(font)
+        self.demLabel.setObjectName("demLabel")
+        self.horizontalLayout_dem.addWidget(self.demLabel)
+        self.demLineEdit = QtWidgets.QLineEdit(self.demWidget)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.demLineEdit.setFont(font)
+        self.demLineEdit.setObjectName("demLineEdit")
+        self.horizontalLayout_dem.addWidget(self.demLineEdit)
+        self.demBrowseButton = QtWidgets.QPushButton(self.demWidget)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.demBrowseButton.setFont(font)
+        self.demBrowseButton.setAutoDefault(False)
+        self.demBrowseButton.setObjectName("demBrowseButton")
+        self.horizontalLayout_dem.addWidget(self.demBrowseButton)
+        self.verticalLayout_2.addWidget(self.demWidget)
         self.droneSensorLabelsWidget = QtWidgets.QHBoxLayout()
         self.droneSensorLabelsWidget.setContentsMargins(9, 9, 9, 9)
         self.droneSensorLabelsWidget.setObjectName("droneSensorLabelsWidget")
@@ -216,6 +240,8 @@ class Ui_Preferences(object):
         self.distanceLabel.setText(_translate("Preferences", "Distance Unit:"))
         self.distanceComboBox.setItemText(0, _translate("Preferences", "Meters"))
         self.distanceComboBox.setItemText(1, _translate("Preferences", "Feet"))
+        self.demLabel.setText(_translate("Preferences", "DEM Directory:"))
+        self.demBrowseButton.setText(_translate("Preferences", "Browse"))
         self.droneSensorLabel.setText(_translate("Preferences", "Drone Sensor File Version:"))
         self.dronSensorVersionLabel.setText(_translate("Preferences", "TextLabel"))
         self.droneSensorButton.setText(_translate("Preferences", "Replace"))

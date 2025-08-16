@@ -9,7 +9,7 @@ import math
 import numpy as np
 from pathlib import Path
 from collections import UserDict, OrderedDict
-from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
+from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices, QCursor
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QPointF, QEvent, QRect, QTimer, QUrl
 from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QCheckBox, QMenu, QAction
 from PyQt5.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
@@ -28,6 +28,9 @@ from core.services.ZipBundleService import ZipBundleService
 from core.services.ImageService import ImageService
 from helpers.LocationInfo import LocationInfo
 from urllib.parse import quote_plus
+
+from core.services.AOILocationService import AOILocationService
+from core.services.SettingsService import SettingsService
 
 
 class Viewer(QMainWindow, Ui_Viewer):
@@ -472,6 +475,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.aoiListWidget.setSpacing(5)
             self.highlights.append(highlight)
             highlight.leftMouseButtonPressed.connect(self._area_of_interest_click)
+            highlight.rightMouseButtonPressed.connect(lambda _x, _y, c=center: self._show_aoi_context_menu(c))
             count += 1
 
         self.areaCountLabel.setText(f"{count} {'Area' if count == 1 else 'Areas'} of Interest")
@@ -788,6 +792,43 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Restore status text if Qt cleared it while the menu was open
         self._refresh_statusbar_message()
 
+    def _show_aoi_context_menu(self, center):
+        settings = SettingsService()
+        dem_dir = settings.get_setting('DEMDirectory')
+        service = AOILocationService(dem_dir)
+        image_path = self.images[self.current_image]['path']
+        result = service.compute_aoi_coordinates(image_path, center[0], center[1])
+        if result is None:
+            self._show_toast("AOI coordinates unavailable", 3000, color="#F44336")
+            return
+        lat, lon, alt = result
+        coord_text = self._format_position_string(lat, lon)
+
+        menu = QMenu(self)
+        menu.setFont(self.statusbar.font())
+
+        act_copy = QAction("Copy coordinates", self)
+        act_copy.triggered.connect(lambda: self._copy_coords_to_clipboard(coord_text))
+        menu.addAction(act_copy)
+
+        act_maps = QAction("Open in Google Maps", self)
+        act_maps.triggered.connect(lambda: self._open_coords_in_maps(lat, lon))
+        menu.addAction(act_maps)
+
+        act_earth = QAction("View in Google Earth", self)
+        act_earth.triggered.connect(lambda: self._open_aoi_in_earth(lat, lon, alt, center))
+        menu.addAction(act_earth)
+
+        act_wa = QAction("Send via WhatsApp", self)
+        act_wa.triggered.connect(lambda: self._share_whatsapp_coords(lat, lon))
+        menu.addAction(act_wa)
+
+        act_tg = QAction("Send via Telegram", self)
+        act_tg.triggered.connect(lambda: self._share_telegram_coords(lat, lon))
+        menu.addAction(act_tg)
+
+        menu.exec_(QCursor.pos())
+
     def _copy_coords_to_clipboard(self, coord_text=None):
         from PyQt5.QtWidgets import QApplication
         if coord_text is None:
@@ -799,14 +840,26 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._show_toast("Coordinates copied", 3000, color="#00C853")
         self._refresh_statusbar_message()
 
+    def _format_position_string(self, lat, lon):
+        if self.position_format == 'Lat/Long - Decimal Degrees':
+            return f"{lat}, {lon}"
+        elif self.position_format == 'Lat/Long - Degrees, Minutes, Seconds':
+            dms = LocationInfo.convert_decimal_to_dms(lat, lon)
+            return (
+                f"{dms['latitude']['degrees']}°{dms['latitude']['minutes']}'{dms['latitude']['seconds']}\"{dms['latitude']['reference']} "
+                f"{dms['longitude']['degrees']}°{dms['longitude']['minutes']}'{dms['longitude']['seconds']}\"{dms['longitude']['reference']}"
+            )
+        else:
+            utm = LocationInfo.convert_degrees_to_utm(lat, lon)
+            return f"{utm['zone_number']}{utm['zone_letter']} {utm['easting']} {utm['northing']}"
+
     def _open_in_maps(self):
         lat_lon = self._get_decimals_or_parse()
         if not lat_lon:
             self._show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
         lat, lon = lat_lon
-        url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
-        QDesktopServices.openUrl(url)
+        self._open_coords_in_maps(lat, lon)
         self._refresh_statusbar_message()
 
     def _open_in_earth(self):
@@ -876,10 +929,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
         lat, lon = lat_lon
-        maps = f"https://www.google.com/maps?q={lat},{lon}"
-        text = f"Coordinate: {lat}, {lon} — {maps}"
-        wa_url = f"https://wa.me/?text={quote_plus(text)}"
-        QDesktopServices.openUrl(QUrl(wa_url))
+        self._share_whatsapp_coords(lat, lon)
         self._refresh_statusbar_message()
 
     def _share_telegram(self):
@@ -888,10 +938,80 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
         lat, lon = lat_lon
+        self._share_telegram_coords(lat, lon)
+        self._refresh_statusbar_message()
+
+    def _open_coords_in_maps(self, lat, lon):
+        url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
+        QDesktopServices.openUrl(url)
+
+    def _share_whatsapp_coords(self, lat, lon):
+        maps = f"https://www.google.com/maps?q={lat},{lon}"
+        text = f"Coordinate: {lat}, {lon} — {maps}"
+        wa_url = f"https://wa.me/?text={quote_plus(text)}"
+        QDesktopServices.openUrl(QUrl(wa_url))
+
+    def _share_telegram_coords(self, lat, lon):
         maps = f"https://www.google.com/maps?q={lat},{lon}"
         tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}') }"
         QDesktopServices.openUrl(QUrl(tg_url))
-        self._refresh_statusbar_message()
+
+    def _open_aoi_in_earth(self, target_lat, target_lon, target_alt, center):
+        lat_lon = self._get_decimals_or_parse()
+        if not lat_lon:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+        cam_lat, cam_lon = lat_lon
+        image_path = self.images[self.current_image]['path']
+        image_service = ImageService(image_path)
+        yaw, pitch = image_service.get_gimbal_orientation()
+        altitude = image_service.get_asl_altitude('m')
+        hfov = image_service.get_camera_hfov()
+
+        if yaw is None:
+            yaw = 0.0
+        if pitch is None:
+            pitch = -90.0
+        if altitude is None:
+            altitude = 100.0
+        if hfov is None:
+            hfov = 60.0
+
+        range_val = 50
+        tilt = max(0, min(180, 90 + pitch))
+
+        kml = (
+            "<?xml version='1.0' encoding='UTF-8'?>\n"
+            "<kml xmlns='http://www.opengis.net/kml/2.2'>\n"
+            "  <Document>\n"
+            "    <name>ADIAT View</name>\n"
+            "    <open>1</open>\n"
+            "    <LookAt>\n"
+            f"      <longitude>{cam_lon}</longitude>\n"
+            f"      <latitude>{cam_lat}</latitude>\n"
+            f"      <altitude>{altitude}</altitude>\n"
+            f"      <heading>{yaw}</heading>\n"
+            f"      <tilt>{tilt}</tilt>\n"
+            "      <altitudeMode>absolute</altitudeMode>\n"
+            f"      <range>{range_val}</range>\n"
+            "    </LookAt>\n"
+            "    <Placemark>\n"
+            "      <name>Photo Location</name>\n"
+            f"      <Point><coordinates>{cam_lon},{cam_lat},0</coordinates></Point>\n"
+            "    </Placemark>\n"
+            "    <Placemark>\n"
+            f"      <name>{center[0]}_{center[1]}</name>\n"
+            f"      <Point><coordinates>{target_lon},{target_lat},{target_alt}</coordinates></Point>\n"
+            "    </Placemark>\n"
+            "  </Document>\n"
+            "</kml>\n"
+        )
+
+        fd, kml_path = tempfile.mkstemp(suffix='.kml')
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(kml)
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(kml_path))
 
     def _get_decimals_or_parse(self):
         # Prefer decimal coords captured from EXIF

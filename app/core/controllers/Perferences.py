@@ -34,6 +34,7 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
+        self.demLineEdit.setText(self.parent.settings_service.get_setting('DEMDirectory'))
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 
@@ -46,6 +47,8 @@ class Preferences(QDialog, Ui_Preferences):
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
         self.droneSensorButton.clicked.connect(self._droneSensorButton_clicked)
+        self.demBrowseButton.clicked.connect(self._demBrowseButton_clicked)
+        self.demLineEdit.textChanged.connect(self._update_dem_directory)
 
     def _update_max_aois(self):
         """Updates the maximum areas of interest setting based on the spinbox value."""
@@ -72,6 +75,17 @@ class Preferences(QDialog, Ui_Preferences):
     def _update_distance_unit(self):
         """Updates the distance unit setting based on the selected combobox value."""
         self.parent.settings_service.set_setting('DistanceUnit', self.distanceComboBox.currentText())
+
+    def _update_dem_directory(self):
+        """Updates the DEM directory path."""
+        self.parent.settings_service.set_setting('DEMDirectory', self.demLineEdit.text())
+
+    def _demBrowseButton_clicked(self):
+        """Opens a directory dialog for selecting DEM files."""
+        dir = self.demLineEdit.text() or self.parent.settings_service.get_setting('DEMDirectory') or ''
+        directory = QFileDialog.getExistingDirectory(self, "Select DEM Directory", dir, QFileDialog.ShowDirsOnly)
+        if directory:
+            self.demLineEdit.setText(directory)
 
     def _droneSensorButton_clicked(self):
         """
