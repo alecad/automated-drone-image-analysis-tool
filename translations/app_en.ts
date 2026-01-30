@@ -5379,6 +5379,26 @@ Please flag at least one AOI, or check &apos;Include images without flagged AOIs
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="70"/>
+        <source>Map Tiles:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="72"/>
+        <source>Map</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="73"/>
+        <source>Satellite</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="74"/>
+        <source>Choose the background tiles for the PDF overview map.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="69"/>
         <source>OK</source>
         <translation type="unfinished"></translation>

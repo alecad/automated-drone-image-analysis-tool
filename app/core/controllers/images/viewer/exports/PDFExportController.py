@@ -113,6 +113,7 @@ class PDFExportController(TranslationMixin):
             organization = settings_dialog.get_organization()
             search_name = settings_dialog.get_search_name()
             include_images_without_flagged_aois = settings_dialog.get_include_images_without_flagged_aois()
+            map_tile_source = settings_dialog.get_map_tile_source()
 
             # Filter images based on user preference to check if there are any images to export
             original_images = images
@@ -183,6 +184,7 @@ class PDFExportController(TranslationMixin):
                 search_name=search_name,
                 images=filtered_images,
                 include_images_without_flagged_aois=include_images_without_flagged_aois,
+                map_tile_source=map_tile_source
             )
 
             # Store all images for map generation

@@ -175,7 +175,7 @@ class PDFDocTemplate(BaseDocTemplate):
 class PdfGeneratorService:
     """Service for generating PDF reports from analysis results."""
 
-    def __init__(self, viewer, organization="", search_name="", images=None, include_images_without_flagged_aois=False):
+    def __init__(self, viewer, organization="", search_name="", images=None, include_images_without_flagged_aois=False, map_tile_source="map"):
         """
         Initialize the PDF generator service.
 
@@ -185,6 +185,7 @@ class PdfGeneratorService:
             search_name: Search/mission name for the report
             images: List of images to include in the PDF (if None, will use viewer.images)
             include_images_without_flagged_aois: Whether to include images without flagged AOIs
+            map_tile_source: Tile source for overview map ('map' or 'satellite')
         """
 
         self.logger = LoggerService()
@@ -193,6 +194,7 @@ class PdfGeneratorService:
         self.search_name = search_name if search_name else "Analysis"
         self.include_images_without_flagged_aois = include_images_without_flagged_aois
         self.images = images  # Store the images to use for PDF generation
+        self.map_tile_source = map_tile_source or "map"
         self.story = []
         self.doc = None
         self._initialize_styles()
@@ -953,8 +955,7 @@ class PdfGeneratorService:
             np.ndarray: Tile image (256x256x3) or None
         """
         try:
-            # Use OpenStreetMap tiles (prefer 'map' for streets/trails visibility)
-            tile_source = 'map'
+            tile_source = self.map_tile_source if self.map_tile_source in ("map", "satellite") else "map"
             cache_path = cache_dir / f"{tile_source}_{zoom}_{x_tile}_{y_tile}.png"
 
             # Check cache first
@@ -964,7 +965,10 @@ class PdfGeneratorService:
                     return tile_img
 
             # Download tile
-            url = f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png"
+            if tile_source == "satellite":
+                url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{zoom}/{y_tile}/{x_tile}"
+            else:
+                url = f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png"
 
             # Use requests with timeout
             headers = {'User-Agent': 'ADIAT/1.0'}
