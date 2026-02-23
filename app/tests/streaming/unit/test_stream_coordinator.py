@@ -162,3 +162,25 @@ class TestStreamCoordinator:
 
         assert coordinator.update_fps_limit(20) is True
         coordinator.stream_manager.set_fps_limit.assert_called_once_with(20)
+
+    def test_connection_drop_stops_active_recording(self, mock_logger):
+        """Unexpected disconnect should stop recording gracefully."""
+        coordinator = StreamCoordinator(mock_logger)
+        coordinator.is_recording = True
+        coordinator.stop_recording = Mock()
+
+        coordinator._on_connection_status_changed(False, "Disconnected")
+
+        coordinator.stop_recording.assert_called_once()
+        assert coordinator.is_connected is False
+
+    def test_recording_stats_forwarded(self, mock_logger):
+        """Recording stats should be forwarded to UI listeners."""
+        coordinator = StreamCoordinator(mock_logger)
+        received = []
+        coordinator.recordingStatsUpdated.connect(received.append)
+
+        payload = {"recording_fps": 24.0, "frame_count": 10}
+        coordinator._on_recording_manager_stats(payload)
+
+        assert received == [payload]

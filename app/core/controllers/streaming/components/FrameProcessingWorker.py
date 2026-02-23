@@ -75,6 +75,9 @@ class FrameProcessingWorker(QObject):
 
         # Check if paused (skip processing if paused)
         if self._pause_check and self._pause_check():
+            # Emit a skipped-frame callback so the coordinator can release the
+            # in-flight slot and continue draining pending frames.
+            self.frameProcessed.emit(frame.copy(), [], timestamp, 0.0, True, video_frame_pos)
             return
 
         try:

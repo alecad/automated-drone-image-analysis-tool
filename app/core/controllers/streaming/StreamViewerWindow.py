@@ -451,6 +451,7 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
         self.stream_coordinator.connectionChanged.connect(self.on_connection_changed)
         self.stream_coordinator.frameReceived.connect(self.on_frame_received)
         self.stream_coordinator.recordingStateChanged.connect(self.on_recording_state_changed)
+        self.stream_coordinator.recordingStatsUpdated.connect(self.on_recording_stats_updated)
         self.stream_coordinator.errorOccurred.connect(self.on_error)
         self.stream_coordinator.streamInfoUpdated.connect(self.on_stream_info_updated)
 
@@ -1796,6 +1797,26 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
                 self.recording_status.setText(self.tr("Status: Not Recording"))
                 self.recording_status.setStyleSheet("QLabel { color: gray; }")
                 self.recording_info.setText(self.tr("Duration: --"))
+
+    @Slot(dict)
+    def on_recording_stats_updated(self, stats: dict):
+        """Render live recording statistics in the recording panel."""
+        if not hasattr(self, 'recording_info') or not isinstance(stats, dict):
+            return
+
+        duration = float(stats.get('segment_duration', 0.0) or 0.0)
+        fps = float(stats.get('recording_fps', 0.0) or 0.0)
+        frames = int(stats.get('frame_count', 0) or 0)
+        queue_size = int(stats.get('queue_size', 0) or 0)
+
+        self.recording_info.setText(
+            self.tr("Duration: {duration:.1f}s | FPS: {fps:.1f} | Frames: {frames} | Queue: {queue}").format(
+                duration=duration,
+                fps=fps,
+                frames=frames,
+                queue=queue_size
+            )
+        )
 
     @Slot(str)
     def on_status_update(self, message: str):

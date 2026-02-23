@@ -643,10 +643,16 @@ class DetectionThumbnailWidget(QWidget):
         # Use tracker to get stable slot assignments
         slot_assignments = self.tracker.update(detections)
 
-        # Update track objects with frame context (for gallery)
-        for detection in detections:
+        # Update track objects only for detections currently shown in thumbnail slots.
+        # This keeps gallery growth aligned with visible detections and bounds per-frame work.
+        visible_detections = list(slot_assignments.values())
+        seen_track_ids = set()
+        for detection in visible_detections:
             track_id = detection.metadata.get('track_id')
             if track_id is not None:
+                if track_id in seen_track_ids:
+                    continue
+                seen_track_ids.add(track_id)
                 self.tracker.update_track(track_id, detection, frame, frame_index, timestamp)
 
         # Calculate scale factor if we need to convert coordinates

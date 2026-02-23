@@ -27,6 +27,7 @@ class TrackGalleryWidget(TranslationMixin, QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.max_items = 200
         self._setup_ui()
         self._apply_translations()
 
@@ -124,6 +125,10 @@ class TrackGalleryWidget(TranslationMixin, QWidget):
 
         # Insert at beginning (newest first)
         self.gallery_list.insertItem(0, item)
+
+        # Keep gallery bounded for long sessions.
+        while self.gallery_list.count() > self.max_items:
+            self.gallery_list.takeItem(self.gallery_list.count() - 1)
 
         # Mark track as saved to prevent duplicates
         track.saved_to_gallery = True

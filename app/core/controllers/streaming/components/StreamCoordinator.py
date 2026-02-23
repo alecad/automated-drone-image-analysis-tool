@@ -32,6 +32,7 @@ class StreamCoordinator(QObject):
     connectionChanged = Signal(bool, str)  # (connected, message)
     frameReceived = Signal(np.ndarray, float, int)  # (frame, timestamp, video_frame_pos)
     recordingStateChanged = Signal(bool, str)  # (recording, path)
+    recordingStatsUpdated = Signal(dict)  # Recording performance/queue stats
     streamInfoUpdated = Signal(dict)  # Stream info (fps, resolution, etc.)
     errorOccurred = Signal(str)  # Error message
 
@@ -211,6 +212,11 @@ class StreamCoordinator(QObject):
             self.recording_manager = RecordingManager(output_directory)
             # Connect signals BEFORE starting so we catch the initial recording started signal
             self.recording_manager.recordingStateChanged.connect(self._on_recording_manager_state_changed)
+            if hasattr(self.recording_manager, "recordingStats"):
+                try:
+                    self.recording_manager.recordingStats.connect(self._on_recording_manager_stats)
+                except Exception:
+                    pass
 
             # Start recording
             success = self.recording_manager.start_recording(resolution)
@@ -284,6 +290,8 @@ class StreamCoordinator(QObject):
     def _on_connection_status_changed(self, connected: bool, message: str):
         """Handle connection status change."""
         self.is_connected = connected
+        if not connected and self.is_recording:
+            self.stop_recording()
         self.connectionChanged.emit(connected, message)
 
     def _on_stream_error(self, error: str):
@@ -316,6 +324,11 @@ class StreamCoordinator(QObject):
 
         # Forward to UI
         self.recordingStateChanged.emit(recording, path_or_message)
+
+    def _on_recording_manager_stats(self, stats: dict):
+        """Forward live recording stats to UI consumers."""
+        if isinstance(stats, dict):
+            self.recordingStatsUpdated.emit(stats)
 
     def _update_stream_info(self):
         """Update stream statistics (polling fallback)."""

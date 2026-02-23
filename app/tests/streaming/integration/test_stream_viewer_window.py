@@ -338,6 +338,24 @@ class TestStreamViewerWindow:
             )
         finally:
             window.close()
+
+    def test_recording_stats_updates_label(self, qapp):
+        """Live recording stats should populate recording info text."""
+        window = StreamViewerWindow(algorithm_name='', theme='dark')
+        try:
+            window.on_recording_stats_updated({
+                "segment_duration": 4.2,
+                "recording_fps": 19.7,
+                "frame_count": 82,
+                "queue_size": 3,
+            })
+
+            text = window.recording_info.text()
+            assert "4.2" in text
+            assert "19.7" in text
+            assert "82" in text
+        finally:
+            window.close()
             QApplication.processEvents()
 
     def test_connect_request_uses_default_when_algorithm_has_no_target_fps(self, qapp):
