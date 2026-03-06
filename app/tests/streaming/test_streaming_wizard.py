@@ -109,6 +109,30 @@ class TestStreamingGuide:
         wizard2 = StreamingGuide()
         assert wizard2.wizard_data["algorithm"] is None
 
+    def test_algorithm_decision_tree_can_select_ai_person_detector(self, qapp):
+        """Selecting person-focused flow should choose AI Person Detector."""
+        wizard = StreamingGuide()
+        page = wizard.pages[4]  # StreamAlgorithmPage
+
+        page._on_algorithm_answer(False)  # Not specific colors
+        assert page.selected_algorithm is None
+        assert "detect people" in wizard.labelCurrentQuestion.text().lower()
+
+        page._on_algorithm_answer(True)  # Yes, detect people
+        assert page.selected_algorithm == "AIPersonDetector"
+        assert wizard.wizard_data["algorithm"] == "AIPersonDetector"
+
+    def test_algorithm_parameters_page_loads_ai_person_detector_widget(self, qapp):
+        """Parameters page should load the AI Person Detector wizard controller."""
+        wizard = StreamingGuide()
+        wizard.wizard_data["algorithm"] = "AIPersonDetector"
+        params_page = wizard.pages[5]  # StreamAlgorithmParametersPage
+
+        params_page.on_enter()
+
+        assert params_page.algorithm_widget is not None
+        assert params_page.algorithm_widget.__class__.__name__ == "AIPersonDetectorWizardController"
+
     @patch('algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController.TextLabeledSlider')
     def test_aggressiveness_mapping(self, mock_slider_class, qapp):
         """Test aggressiveness slider maps to correct percentile values."""

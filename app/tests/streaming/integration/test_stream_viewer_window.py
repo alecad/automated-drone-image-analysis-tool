@@ -271,6 +271,26 @@ class TestStreamViewerWindow:
             window.close()
             QApplication.processEvents()
 
+    def test_update_thumbnails_runs_on_empty_detections(self, qapp, sample_frame):
+        """Empty detection frames should still advance thumbnail aging/expiry."""
+        window = StreamViewerWindow(algorithm_name='', theme='dark')
+        try:
+            timestamp = 9.87
+            window._original_frames_queue[timestamp] = sample_frame.copy()
+            window.thumbnail_widget.update_thumbnails = Mock()
+
+            window._update_thumbnails(sample_frame, [], timestamp, 7)
+
+            window.thumbnail_widget.update_thumbnails.assert_called_once()
+            call_args, call_kwargs = window.thumbnail_widget.update_thumbnails.call_args
+            assert call_args[0] is not None
+            assert call_args[1] == []
+            assert call_kwargs["timestamp"] == timestamp
+            assert timestamp not in window._original_frames_queue
+        finally:
+            window.close()
+            QApplication.processEvents()
+
     def test_queue_worker_frame_replaces_pending_and_counts_drop(self, qapp, sample_frame):
         """Worker queue should keep only latest pending frame under backpressure."""
         window = StreamViewerWindow(algorithm_name='', theme='dark')

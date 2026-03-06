@@ -23,12 +23,16 @@ import cv2
 from types import SimpleNamespace
 import time
 import os
+import sys
+import pathlib
+import platform
 
 import qdarktheme
-from core.controllers.Perferences import Preferences
+from core.controllers.Preferences import Preferences
 from core.controllers.streaming.StreamingGuide import StreamingGuide
 # MainWindow imported lazily in _open_image_analysis() to avoid circular dependency
 from core.services.SettingsService import SettingsService
+from core.services.ConfigService import ConfigService
 from core.views.streaming.StreamViewerWindow_ui import Ui_StreamViewerWindow
 from core.services.LoggerService import LoggerService
 from core.controllers.streaming.components import StreamCoordinator, DetectionRenderer, StreamStatistics
@@ -381,20 +385,12 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
             )
         )
 
-        # Populate with available algorithms from registry
+        # Populate with available algorithms from shared registry
         registry = self._algorithm_registry()
-        algorithm_options = []
-        preferred_order = [
-            "ColorAnomalyAndMotionDetection",
-            "ColorDetection",
+        algorithm_options = [
+            (self.tr(cfg.get("label", key)), key)
+            for key, cfg in registry.items()
         ]
-        for key in preferred_order:
-            if key in registry:
-                label = self.tr(registry[key].get("label", key))
-                algorithm_options.append((label, key))
-        for key, cfg in registry.items():
-            if key not in [k for _, k in algorithm_options]:
-                algorithm_options.append((self.tr(cfg.get("label", key)), key))
 
         # Add to combo box
         for label, key in algorithm_options:
@@ -896,14 +892,10 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
         if not self.algorithm_widget:
             return None
 
-        # Different algorithms expose their services differently
-        # ColorDetectionController has color_detector
-        if hasattr(self.algorithm_widget, 'color_detector'):
-            return self.algorithm_widget.color_detector
-
-        # ColorAnomalyAndMotionDetectionController has integrated_detector
-        if hasattr(self.algorithm_widget, 'integrated_detector'):
-            return self.algorithm_widget.integrated_detector
+        # Different algorithms expose their services under different attributes.
+        for attr_name in ('color_detector', 'integrated_detector', 'person_detector'):
+            if hasattr(self.algorithm_widget, attr_name):
+                return getattr(self.algorithm_widget, attr_name)
 
         return None
 
@@ -1239,11 +1231,7 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
             timestamp: float,
             frame_index: int):
         """Update thumbnails for a processed frame."""
-        if not detections:
-            self._discard_original_frame(timestamp)
-            return
-
-        detection_objects = self._detections_to_thumbnail_objects(detections)
+        detection_objects = self._detections_to_thumbnail_objects(detections or [])
         processing_resolution, original_resolution = self._get_resolution_metadata(detection_objects)
 
         thumbnail_frame = self._original_frames_queue.get(timestamp, frame)
@@ -1321,19 +1309,39 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
         return algorithms.get(algorithm_name)
 
     def _algorithm_registry(self) -> Dict[str, Dict[str, Any]]:
-        """Return the available streaming algorithms."""
-        return {
-            'ColorDetection': {
-                'label': 'Color Detection',
-                'controller': 'ColorDetectionController',
-                'module': 'algorithms.streaming.ColorDetection.controllers.ColorDetectionController'
-            },
-            'ColorAnomalyAndMotionDetection': {
-                'label': 'Color Anomaly & Motion Detection',
-                'controller': 'ColorAnomalyAndMotionDetectionController',
-                'module': 'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionController'
+        """Return available streaming algorithms loaded from algorithms.conf."""
+        config_path = self._get_algorithms_config_path()
+        config_service = ConfigService(config_path)
+        configured_algorithms = config_service.get_streaming_algorithms()
+
+        system = platform.system()
+        registry: Dict[str, Dict[str, Any]] = {}
+        for algorithm in configured_algorithms:
+            name = algorithm.get('name')
+            controller = algorithm.get('controller')
+            if not name or not controller:
+                continue
+
+            platforms = algorithm.get('platforms') or []
+            if platforms and system not in platforms:
+                continue
+
+            module_name = algorithm.get('module') or f'algorithms.streaming.{name}.controllers.{controller}'
+            registry[name] = {
+                'label': algorithm.get('label', name),
+                'controller': controller,
+                'module': module_name
             }
-        }
+
+        return registry
+
+    def _get_algorithms_config_path(self) -> str:
+        """Return the path to algorithms.conf for source and frozen builds."""
+        if getattr(sys, 'frozen', False):
+            app_root = sys._MEIPASS
+        else:
+            app_root = str(pathlib.Path(__file__).resolve().parents[3])
+        return os.path.join(app_root, 'algorithms.conf')
 
     def _import_algorithm_controller(self, algorithm_config: Dict[str, Any]):
         """

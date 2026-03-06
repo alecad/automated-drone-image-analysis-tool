@@ -31,3 +31,12 @@ class ConfigService:
             Each dictionary contains algorithm metadata and configuration.
         """
         return self.config['algorithms']
+
+    def get_streaming_algorithms(self):
+        """Retrieve the list of streaming algorithms from the configuration.
+
+        Returns:
+            A list of streaming algorithm dictionaries specified in the configuration.
+            Returns an empty list when the key is missing.
+        """
+        return self.config.get('streaming_algorithms', [])

@@ -76,7 +76,8 @@ class StreamAlgorithmParametersPage(BasePage):
         # but might be a display name, so map it if needed
         algorithm_map = {
             "Color Detection": "ColorDetection",
-            "Color Anomaly & Motion Detection": "ColorAnomalyAndMotionDetection"
+            "Color Anomaly & Motion Detection": "ColorAnomalyAndMotionDetection",
+            "AI Person Detector": "AIPersonDetector",
         }
 
         # If it's a display name, convert to key; otherwise use as-is
@@ -123,7 +124,11 @@ class StreamAlgorithmParametersPage(BasePage):
                 "ColorAnomalyAndMotionDetection": (
                     "algorithms.streaming.ColorAnomalyAndMotionDetection.controllers."
                     "ColorAnomalyAndMotionDetectionWizardController"
-                )
+                ),
+                "AIPersonDetector": (
+                    "algorithms.streaming.AIPersonDetector.controllers."
+                    "AIPersonDetectorWizardController"
+                ),
             }
 
             module_path = algorithm_wizard_modules.get(current_algorithm_name)
@@ -172,15 +177,16 @@ class StreamAlgorithmParametersPage(BasePage):
 
             # Get theme
             theme = self.settings_service.get_setting('Theme', 'Dark')
+            algorithm_labels = {
+                "ColorDetection": self.tr("Color Detection"),
+                "ColorAnomalyAndMotionDetection": self.tr("Color Anomaly & Motion Detection"),
+                "AIPersonDetector": self.tr("AI Person Detector"),
+            }
 
             # Update the page title
             try:
                 page_title_widget = getattr(self.dialog, 'labelPageAlgorithmParametersTitle', None)
                 if page_title_widget is not None:
-                    algorithm_labels = {
-                        "ColorDetection": self.tr("Color Detection"),
-                        "ColorAnomalyAndMotionDetection": self.tr("Color Anomaly & Motion Detection")
-                    }
                     algo_label = algorithm_labels.get(current_algorithm_name, self.tr("Algorithm"))
                     page_title_widget.setText(
                         self.tr("{algorithm} Parameters").format(algorithm=algo_label)

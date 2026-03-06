@@ -11,7 +11,8 @@ class StreamAlgorithmPage(BasePage):
         super().__init__(wizard_data, settings_service, dialog)
         # Algorithm selection state
         self.algorithm_decision_state = {
-            'specific_color': None
+            'specific_color': None,
+            'person_detection': None,
         }
         self.selected_algorithm = None
 
@@ -77,7 +78,8 @@ class StreamAlgorithmPage(BasePage):
     def _reset_algorithm_selection(self):
         """Reset algorithm selection to initial state."""
         self.algorithm_decision_state = {
-            'specific_color': None
+            'specific_color': None,
+            'person_detection': None,
         }
         self.selected_algorithm = None
         # Clear algorithm from wizard_data to ensure fresh start
@@ -147,9 +149,21 @@ class StreamAlgorithmPage(BasePage):
                 self.selected_algorithm = "ColorDetection"
                 self._show_algorithm_result()
             else:  # No - not looking for specific colors
-                # Color Anomaly & Motion Detection (combined detection)
+                self.dialog.labelCurrentQuestion.setText(
+                    self.tr("Are you primarily trying to detect people?")
+                )
+                self.dialog.labelAlgorithmResult.setVisible(False)
+                self.selected_algorithm = None
+                if hasattr(self, "on_validation_changed"):
+                    self.on_validation_changed()
+                return
+        elif state['person_detection'] is None:
+            state['person_detection'] = answer
+            if answer:
+                self.selected_algorithm = "AIPersonDetector"
+            else:
                 self.selected_algorithm = "ColorAnomalyAndMotionDetection"
-                self._show_algorithm_result()
+            self._show_algorithm_result()
 
     def _show_algorithm_result(self):
         """Display the selected algorithm result."""
@@ -157,7 +171,8 @@ class StreamAlgorithmPage(BasePage):
             # Map algorithm key to display name
             algorithm_names = {
                 "ColorDetection": self.tr("Color Detection"),
-                "ColorAnomalyAndMotionDetection": self.tr("Color Anomaly & Motion Detection")
+                "ColorAnomalyAndMotionDetection": self.tr("Color Anomaly & Motion Detection"),
+                "AIPersonDetector": self.tr("AI Person Detector"),
             }
             display_name = algorithm_names.get(self.selected_algorithm, self.selected_algorithm)
             self.dialog.labelAlgorithmResult.setText(
@@ -180,5 +195,8 @@ class StreamAlgorithmPage(BasePage):
             },
             "ColorAnomalyAndMotionDetection": {
                 "label": "Color Anomaly & Motion Detection",
+            },
+            "AIPersonDetector": {
+                "label": "AI Person Detector",
             },
         }
