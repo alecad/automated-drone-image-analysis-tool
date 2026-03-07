@@ -284,15 +284,20 @@ class AIPersonStreamingService(QObject):
 
     def _resolve_model_path(self, cfg: AIPersonStreamingConfig) -> str:
         """Resolve ONNX model path for source and frozen builds."""
-        model_name = "ai_person_model_V2_1024.onnx" if cfg.high_resolution_model else "ai_person_model_V2_640.onnx"
+        model_name = "ai_person_model_V3_1024.onnx" if cfg.high_resolution_model else "ai_person_model_V3_640.onnx"
         if getattr(sys, "frozen", False):
-            return os.path.join(sys._MEIPASS, "ai_models", model_name)
+            return os.path.join(
+                sys._MEIPASS,
+                "algorithms",
+                "models",
+                "AIPersonDetector",
+                model_name
+            )
 
         model_path = (
             Path(__file__).resolve().parents[3]
-            / "images"
+            / "models"
             / "AIPersonDetector"
-            / "services"
             / model_name
         )
         return str(model_path)

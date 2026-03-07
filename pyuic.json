@@ -77,8 +77,16 @@
       "app/algorithms/images/ThermalAnomaly/views"
     ],
     [
+      "resources/views/algorithms/ThermalResidualAnomaly.ui",
+      "app/algorithms/images/ThermalResidualAnomaly/views"
+    ],
+    [
       "resources/views/algorithms/ThermalAnomalyWizard.ui",
       "app/algorithms/images/ThermalAnomaly/views"
+    ],
+    [
+      "resources/views/algorithms/ThermalResidualAnomalyWizard.ui",
+      "app/algorithms/images/ThermalResidualAnomaly/views"
     ],
     [
       "resources/views/algorithms/RXAnomalyWizard.ui",

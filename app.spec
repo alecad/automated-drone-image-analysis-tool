@@ -33,8 +33,8 @@ if platform.system() == 'Windows':
                     ('app/colors.pkl', '.'),
                     ('colors.csv', '.'),
                     # AI Person Detector models
-                    ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_640.onnx', 'ai_models'),
-                    ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_1024.onnx', 'ai_models')
+                    ('app/algorithms/models/AIPersonDetector/ai_person_model_V3_640.onnx', 'algorithms/models/AIPersonDetector'),
+                    ('app/algorithms/models/AIPersonDetector/ai_person_model_V3_1024.onnx', 'algorithms/models/AIPersonDetector')
                     ] + translation_datas,
 
                 hiddenimports=[
@@ -89,8 +89,8 @@ elif platform.system() == 'Darwin':
                         ('app/colors.pkl', 'app'),
                         ('colors.csv', 'app'),
                         # AI Person Detector models
-                        ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_640.onnx', 'ai_models'),
-                        ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_1024.onnx', 'ai_models')
+                        ('app/algorithms/models/AIPersonDetector/ai_person_model_V3_640.onnx', 'algorithms/models/AIPersonDetector'),
+                        ('app/algorithms/models/AIPersonDetector/ai_person_model_V3_1024.onnx', 'algorithms/models/AIPersonDetector')
                         ] + translation_datas,
                     hiddenimports=[
                         'shapely',

@@ -16,6 +16,7 @@ class AlgorithmSelectionPage(BasePage):
         self.algorithm_decision_state = {
             'thermal': None,
             'temperature_range': None,
+            'local_residual_anomaly': None,
             'person_only': None,
             'specific_color': None,
             'direct_color_control': None,
@@ -80,6 +81,7 @@ class AlgorithmSelectionPage(BasePage):
         self.algorithm_decision_state = {
             'thermal': None,
             'temperature_range': None,
+            'local_residual_anomaly': None,
             'person_only': None,
             'specific_color': None,
             'direct_color_control': None,
@@ -162,8 +164,17 @@ class AlgorithmSelectionPage(BasePage):
                 self.selected_algorithm = "Temperature Range"
                 self._show_algorithm_result()
             else:  # No - temperature anomaly
+                self.dialog.labelCurrentQuestion.setText(
+                    self.tr("Do you want to detect anomalies relative to local surroundings?")
+                )
+
+        elif state['thermal'] and state['temperature_range'] is False and state['local_residual_anomaly'] is None:
+            state['local_residual_anomaly'] = answer
+            if answer:  # Yes - local residual anomaly detector
                 self.selected_algorithm = "Temperature Residual Anomaly"
-                self._show_algorithm_result()
+            else:  # No - standard anomaly detector
+                self.selected_algorithm = "Temperature Anomaly"
+            self._show_algorithm_result()
 
         elif not state['thermal'] and state['person_only'] is None:
             state['person_only'] = answer

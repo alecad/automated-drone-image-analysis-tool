@@ -8,11 +8,13 @@ import xml.etree.ElementTree as ET
 import time
 import traceback
 import hashlib
+from importlib import import_module
 
 from pathlib import Path
 from multiprocessing import Pool, pool
 from PySide6.QtCore import QObject, Signal, Slot
 
+from algorithms.AlgorithmService import AnalysisResult
 from core.services.LoggerService import LoggerService
 from core.services.advancedFeatures.HistogramNormalizationService import HistogramNormalizationService
 from core.services.advancedFeatures.KMeansClustersService import KMeansClustersService
@@ -205,6 +207,51 @@ class AnalyzeService(QObject):
             self.logger.error(f"An error occurred during processing: {e}")
 
     @staticmethod
+    def _resolve_algorithm_service_class(algorithm):
+        """Resolve an algorithm service class using naming conventions.
+
+        Args:
+            algorithm: Algorithm configuration dictionary.
+
+        Returns:
+            The resolved algorithm service class.
+
+        Raises:
+            ValueError: If configuration is incomplete or the service cannot be resolved.
+        """
+        algorithm_name = algorithm.get('name')
+        service_name = algorithm.get('service')
+        if not algorithm_name or not service_name:
+            raise ValueError(
+                "Algorithm config missing required fields: 'name' and 'service'"
+            )
+
+        # Backward-compatibility alias for legacy typo in historical configs.
+        name_aliases = {
+            'AIPersonDetetor': 'AIPersonDetector',
+        }
+        candidate_names = [algorithm_name]
+        if algorithm_name in name_aliases:
+            candidate_names.append(name_aliases[algorithm_name])
+
+        last_error = None
+        for candidate_name in candidate_names:
+            module_name = f'algorithms.images.{candidate_name}.services.{service_name}'
+            try:
+                module = import_module(module_name)
+                service_cls = getattr(module, service_name, None)
+                if service_cls is None:
+                    last_error = AttributeError(
+                        f"Service class '{service_name}' not found in module '{module_name}'"
+                    )
+                    continue
+                return service_cls
+            except Exception as exc:
+                last_error = exc
+
+        raise ValueError(f"Unknown algorithm service: {service_name}") from last_error
+
+    @staticmethod
     def process_file(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
                      thermal, processing_resolution=1.0):
         """Process a single image using the selected algorithm and settings.
@@ -233,36 +280,36 @@ class AnalyzeService(QObject):
             AnalysisResult containing processed image path, areas of interest,
             and error message if any.
         """
-        img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-        if img is None:
-            raise ValueError(f"Could not load image: {full_path}")
-
-        # Store original image for thumbnail generation (before scaling)
-        original_img = img.copy()
-
-        # Store original dimensions for coordinate transformation
-        original_height, original_width = img.shape[:2]
-        scale_factor = 1.0
-
-        # Apply percentage-based resolution scaling if specified
-        if processing_resolution is not None and processing_resolution < 1.0:
-            scale_factor = processing_resolution
-            new_width = int(original_width * scale_factor)
-            new_height = int(original_height * scale_factor)
-
-            # Ensure minimum dimensions of at least 10 pixels
-            if new_width >= 10 and new_height >= 10:
-                # Use INTER_AREA for best quality when downscaling
-                img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
-
-                # Scale area thresholds to match processing resolution (area scales by factor²)
-                min_area = int(min_area * scale_factor * scale_factor)
-                max_area = int(max_area * scale_factor * scale_factor) if max_area > 0 else 0
-            else:
-                # Image too small to scale, process at original resolution
-                scale_factor = 1.0
-
         try:
+            img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                raise ValueError(f"Could not load image: {full_path}")
+
+            # Store original image for thumbnail generation (before scaling)
+            original_img = img.copy()
+
+            # Store original dimensions for coordinate transformation
+            original_height, original_width = img.shape[:2]
+            scale_factor = 1.0
+
+            # Apply percentage-based resolution scaling if specified
+            if processing_resolution is not None and processing_resolution < 1.0:
+                scale_factor = processing_resolution
+                new_width = int(original_width * scale_factor)
+                new_height = int(original_height * scale_factor)
+
+                # Ensure minimum dimensions of at least 10 pixels
+                if new_width >= 10 and new_height >= 10:
+                    # Use INTER_AREA for best quality when downscaling
+                    img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+                    # Scale area thresholds to match processing resolution (area scales by factor²)
+                    min_area = int(min_area * scale_factor * scale_factor)
+                    max_area = int(max_area * scale_factor * scale_factor) if max_area > 0 else 0
+                else:
+                    # Image too small to scale, process at original resolution
+                    scale_factor = 1.0
+
             if not thermal:
                 # Apply histogram normalization if a reference image is provided
                 histogram_service = None
@@ -276,27 +323,8 @@ class AnalyzeService(QObject):
                     kmeans_service = KMeansClustersService(kmeans_clusters)
                     img = kmeans_service.generate_clusters(img)
 
-            # Instantiate the algorithm class and process the image
-            # Lazy import to avoid loading all algorithm services in worker processes
-            service_name = algorithm['service']
-            if service_name == 'ColorRangeService':
-                from algorithms.images.ColorRange.services.ColorRangeService import ColorRangeService as cls
-            elif service_name == 'RXAnomalyService':
-                from algorithms.images.RXAnomaly.services.RXAnomalyService import RXAnomalyService as cls
-            elif service_name == 'MatchedFilterService':
-                from algorithms.images.MatchedFilter.services.MatchedFilterService import MatchedFilterService as cls
-            elif service_name == 'MRMapService':
-                from algorithms.images.MRMap.services.MRMapService import MRMapService as cls
-            elif service_name == 'AIPersonDetectorService':
-                from algorithms.images.AIPersonDetector.services.AIPersonDetectorService import AIPersonDetectorService as cls
-            elif service_name == 'HSVColorRangeService':
-                from algorithms.images.HSVColorRange.services.HSVColorRangeService import HSVColorRangeService as cls
-            elif service_name == 'ThermalRangeService':
-                from algorithms.images.ThermalRange.services.ThermalRangeService import ThermalRangeService as cls
-            elif service_name == 'ThermalAnomalyService':
-                from algorithms.images.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService as cls
-            else:
-                raise ValueError(f"Unknown algorithm service: {service_name}")
+            # Instantiate the algorithm service lazily in the worker process.
+            cls = AnalyzeService._resolve_algorithm_service_class(algorithm)
             instance = cls(identifier_color, min_area, max_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
             instance.set_scale_factor(scale_factor)  # Pass scale factor to algorithm for coordinate transformation
             result = instance.process_image(img, full_path, input_dir, output_dir)
@@ -331,7 +359,9 @@ class AnalyzeService(QObject):
 
         except Exception as e:
             logger = LoggerService()
-            logger.error(e)
+            logger.error(traceback.format_exc())
+            logger.error(f"Error processing image {full_path}: {e}")
+            return AnalysisResult(input_path=full_path, error_message=str(e))
 
     @Slot()
     def _process_complete(self, result):

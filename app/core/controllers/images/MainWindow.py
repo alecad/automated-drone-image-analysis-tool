@@ -1,5 +1,6 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
 from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
+from algorithms.images.ThermalResidualAnomaly.controllers.ThermalResidualAnomalyController import ThermalResidualAnomalyController
 from algorithms.images.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
 from algorithms.images.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
 from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
@@ -16,7 +17,7 @@ from core.services.ResultsScannerService import ResultsScannerService
 from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
 # StreamViewerWindow imported lazily in _open_streaming_detector() to avoid circular dependency
 from core.controllers.images.VideoParser import VideoParser
-from core.controllers.Perferences import Preferences
+from core.controllers.Preferences import Preferences
 from core.controllers.images.viewer.Viewer import Viewer
 from helpers.PickleHelper import PickleHelper
 from core.views.images.MainWindow_ui import Ui_MainWindow
@@ -249,6 +250,10 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 "THERMAL ANOMALY: Detects hot/cold spots in thermal imagery\n"
                 "  • Best for: Night searches, detecting people/animals by body heat\n"
                 "  • Limitation: Requires thermal camera, may detect sun-heated objects\n"
+                "\n"
+                "TEMPERATURE RESIDUAL ANOMALY: Detects local delta-T outliers using radiometric residuals\n"
+                "  • Best for: Isolating rare hot/cold thermal signatures in mixed backgrounds\n"
+                "  • Limitation: Requires radiometric thermal data, can be sensitive to threshold choice\n"
                 "\n"
                 "THERMAL RANGE: Temperature-based detection (e.g., 35-40°C for humans)\n"
                 "  • Best for: Human detection with thermal camera (known body temp)\n"

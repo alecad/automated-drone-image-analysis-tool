@@ -7,6 +7,7 @@ Tests the core image analysis orchestration service.
 import pytest
 import tempfile
 import os
+import numpy as np
 from unittest.mock import patch, MagicMock
 from PySide6.QtCore import QObject
 from core.services.AnalyzeService import AnalyzeService
@@ -140,3 +141,39 @@ def test_analyze_service_cancellation(analyze_service):
     assert analyze_service.cancelled is False
     analyze_service.cancelled = True
     assert analyze_service.cancelled is True
+
+
+@patch('core.services.AnalyzeService.cv2.imdecode')
+@patch('core.services.AnalyzeService.np.fromfile')
+def test_process_file_unknown_algorithm_service_returns_error(mock_fromfile, mock_imdecode):
+    """Unknown algorithm services should return an explicit error result."""
+    mock_fromfile.return_value = np.array([1], dtype=np.uint8)
+    mock_imdecode.return_value = np.zeros((20, 20, 3), dtype=np.uint8)
+
+    algorithm = {
+        'name': 'ColorRange',
+        'type': 'RGB',
+        'service': 'MissingService',
+        'combine_overlapping_aois': True
+    }
+
+    result = AnalyzeService.process_file(
+        algorithm=algorithm,
+        identifier_color=(100, 150, 200),
+        min_area=10,
+        max_area=1000,
+        aoi_radius=5,
+        options={},
+        full_path='/tmp/fake.jpg',
+        input_dir='/tmp/input',
+        output_dir='/tmp/output',
+        hist_ref_path=None,
+        kmeans_clusters=None,
+        thermal=False,
+        processing_resolution=1.0
+    )
+
+    assert result is not None
+    assert result.input_path == '/tmp/fake.jpg'
+    assert result.error_message is not None
+    assert 'Unknown algorithm service: MissingService' in result.error_message
