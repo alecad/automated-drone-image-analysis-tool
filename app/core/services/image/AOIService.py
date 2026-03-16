@@ -218,8 +218,8 @@ class AOIService:
                 self.logger.error(f"AOIService: Failed to calculate AOI GPS - {e}")
             return None
 
+    @staticmethod
     def _calculate_ground_position(
-        self,
         drone_lat: float, drone_lon: float,
         u: float, v: float,
         cx: float, cy: float,
