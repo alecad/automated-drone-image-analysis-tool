@@ -15,7 +15,24 @@ from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMous
 from core.views.images.viewer.widgets.MapTileLoader import MapTileLoader
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService, _get_terrain_service
+from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
+
+
+# Lazy terrain service singleton for FOV terrain correction
+_terrain_service = None
+
+
+def _get_terrain_service():
+    """Lazy initialization of terrain service singleton."""
+    global _terrain_service
+    if _terrain_service is None:
+        try:
+            from core.services.terrain import TerrainService
+            _terrain_service = TerrainService()
+        except Exception:
+            pass
+    return _terrain_service
 
 
 class GPSMapView(TranslationMixin, QGraphicsView):
@@ -35,6 +52,7 @@ class GPSMapView(TranslationMixin, QGraphicsView):
     def __init__(self, parent=None, offline_only=False):
         """Initialize the GPS map view."""
         super().__init__(parent)
+        self.logger = LoggerService()
         self.offline_only = bool(offline_only)
 
         # Create scene
@@ -712,18 +730,19 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             item.setPen(QPen(border_color, border_width))
             item.setZValue(z_value)
 
-    def get_image_bearing_lazy(self, image_path):
+    def get_image_bearing_lazy(self, image_path, calculated_bearing=None):
         """
         Extract bearing/yaw information from image (lazy loading).
 
         Args:
             image_path: Path to the image file
+            calculated_bearing: Optional pre-computed bearing (e.g. from Wingtra CSV)
 
         Returns:
             float: Bearing in degrees (0-360), or None if not available
         """
         try:
-            image_service = ImageService(image_path, '')
+            image_service = ImageService(image_path, '', calculated_bearing=calculated_bearing)
             return image_service.get_camera_yaw()
         except Exception:
             return None
@@ -1336,9 +1355,15 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                     if custom_alt and custom_alt <= 0:
                         custom_alt = None
 
-            image_service = ImageService(image_path, '')
+            # Get bearing and per-image AGL from the image dict if available
+            calculated_bearing = current_data.get('bearing')
+            wingtra_agl_ft = current_data.get('wingtra_agl_ft')
 
-            # Get GSD and dimensions
+            image_service = ImageService(image_path, '', calculated_bearing=calculated_bearing)
+
+            # Get GSD - use per-image AGL (e.g. Wingtra) if available, else custom
+            if wingtra_agl_ft is not None:
+                custom_alt = wingtra_agl_ft
             gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
             if gsd_cm is None or gsd_cm <= 0:
                 return
@@ -1374,6 +1399,37 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             else:
                 reported_agl = image_service.get_relative_altitude('m') or 0
             absolute_alt = image_service.get_asl_altitude('m')
+            # Calculate corners
+            corners_image = [
+                (-width_m / 2, -height_m / 2),
+                (width_m / 2, -height_m / 2),
+                (width_m / 2, height_m / 2),
+                (-width_m / 2, height_m / 2)
+            ]
+
+            # Rotate and convert to GPS
+            bearing_rad = math.radians(-bearing)
+            cos_b = math.cos(bearing_rad)
+            sin_b = math.sin(bearing_rad)
+
+            corners_gps = []
+            earth_radius = 6378137.0
+
+            # Determine terrain correction parameters
+            terrain_service = _get_terrain_service()
+            drone_orthometric = None
+            flat_agl = None
+
+            if terrain_service and terrain_service.enabled:
+                absolute_alt = image_service.get_asl_altitude('m')
+                if absolute_alt and absolute_alt > 50:
+                    geoid = terrain_service.get_geoid_undulation(image_lat, image_lon)
+                    drone_orthometric = absolute_alt - geoid if geoid is not None else absolute_alt
+
+                    # Recover the flat AGL used for GSD calculation
+                    intrinsics = image_service.get_camera_intrinsics()
+                    if intrinsics:
+                        flat_agl = gsd_m * intrinsics['focal_length_mm'] / intrinsics['sensor_width_mm'] * width
 
             effective_agl = reported_agl
             terrain_elevation = None
@@ -1504,6 +1560,18 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                      (-width_m / 2, height_m / 2)],
                     bearing, image_lat, image_lon
                 )
+                # Terrain-correct this corner if available
+                if drone_orthometric is not None and flat_agl and flat_agl > 0:
+                    terrain_result = terrain_service.get_elevation(corner_lat, corner_lon)
+                    if (terrain_result.source == 'terrain' and
+                            terrain_result.elevation_m is not None):
+                        effective_agl = max(1.0, drone_orthometric - terrain_result.elevation_m)
+                        scale = effective_agl / flat_agl
+                        corner_lat = image_lat + delta_lat * scale
+                        corner_lon = image_lon + delta_lon * scale
+
+                scene_point = self.lat_lon_to_scene(corner_lat, corner_lon)
+                corners_gps.append(scene_point)
 
             # Create FOV polygon
             polygon = QPolygonF(corners_scene)
@@ -1535,8 +1603,8 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             if self.compass_container:
                 self.compass_container.raise_()
 
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"update_fov_box failed: {e}")
 
     def clear_fov_box(self):
         """Remove the FOV box from the map."""
