@@ -6,10 +6,82 @@ first video stream (e.g. Skydio X10), which causes OpenCV to grab the wrong trac
 """
 
 import os
+import platform
+import shutil
 import subprocess
 import tempfile
 import json
 import cv2
+
+# Common Homebrew binary directories that may not be in PATH when the app
+# is launched outside a terminal (e.g. from Finder or a .app bundle).
+_HOMEBREW_BIN_DIRS = [
+    '/opt/homebrew/bin',      # Apple Silicon
+    '/usr/local/bin',         # Intel Mac
+]
+
+
+def _which_with_fallback(name):
+    """Find an executable by name, checking PATH then common Homebrew locations."""
+    path = shutil.which(name)
+    if path:
+        return path
+    if platform.system() == 'Darwin':
+        for d in _HOMEBREW_BIN_DIRS:
+            candidate = os.path.join(d, name)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    return None
+
+
+def _find_ffprobe():
+    """Locate the ffprobe binary.
+
+    Checks the system PATH first, then common Homebrew locations on macOS,
+    then falls back to the imageio-ffmpeg bundled binary.
+
+    Returns:
+        Absolute path to ffprobe, or None if not found.
+    """
+    path = _which_with_fallback('ffprobe')
+    if path:
+        return path
+    try:
+        import imageio_ffmpeg
+        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+        # imageio-ffmpeg bundles ffprobe next to ffmpeg
+        ffprobe_path = os.path.join(os.path.dirname(ffmpeg_path), 'ffprobe')
+        if os.path.isfile(ffprobe_path):
+            return ffprobe_path
+    except (ImportError, RuntimeError):
+        pass
+    return None
+
+
+def _find_ffmpeg():
+    """Locate the ffmpeg binary.
+
+    Checks the system PATH first, then common Homebrew locations on macOS,
+    then falls back to the imageio-ffmpeg bundled binary.
+
+    Returns:
+        Absolute path to ffmpeg, or None if not found.
+    """
+    path = _which_with_fallback('ffmpeg')
+    if path:
+        return path
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except (ImportError, RuntimeError):
+        pass
+    return None
+
+
+_FFMPEG_MISSING_MSG = (
+    "ffmpeg not found. Install via 'brew install ffmpeg' on macOS "
+    "or add imageio-ffmpeg to your environment."
+)
 
 
 def detect_thumbnail_track(cap) -> bool:
@@ -54,9 +126,16 @@ def remux_to_main_track(source_path, logger=None):
         Caller is responsible for deleting the temp file when done.
     """
     try:
+        ffprobe = _find_ffprobe()
+        ffmpeg = _find_ffmpeg()
+        if not ffprobe or not ffmpeg:
+            if logger:
+                logger.error(_FFMPEG_MISSING_MSG)
+            return None
+
         # Use ffprobe to find the real video stream
         probe = subprocess.run(
-            ['ffprobe', '-v', 'error', '-show_streams', '-of', 'json', source_path],
+            [ffprobe, '-v', 'error', '-show_streams', '-of', 'json', source_path],
             capture_output=True, text=True, timeout=10
         )
         if probe.returncode != 0:
@@ -88,7 +167,7 @@ def remux_to_main_track(source_path, logger=None):
         temp_fd, temp_path = tempfile.mkstemp(suffix='.mp4')
         os.close(temp_fd)
         result = subprocess.run(
-            ['ffmpeg', '-y', '-i', source_path, '-map', f'0:{best_idx}', '-c', 'copy', temp_path],
+            [ffmpeg, '-y', '-i', source_path, '-map', f'0:{best_idx}', '-c', 'copy', temp_path],
             capture_output=True, text=True, timeout=60
         )
         if result.returncode != 0:
