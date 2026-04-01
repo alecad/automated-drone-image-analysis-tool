@@ -1378,7 +1378,10 @@ class AOIController(TranslationMixin):
         if hasattr(self.parent, 'gallery_controller'):
             gc = self.parent.gallery_controller
             heatmap_service = gc.heatmap_service
-            heatmap_available = heatmap_service.is_valid()
+            # Ensure heatmap is computed even if gallery mode hasn't been entered yet
+            if not heatmap_service.is_valid() and self.parent.images:
+                heatmap_service.compute_heatmap(self.parent.images)
+            heatmap_available = heatmap_service.has_data()
 
         dialog = AOIFilterDialog(self.parent, current_filters, temperature_unit, is_thermal,
                                  heatmap_available=heatmap_available, heatmap_service=heatmap_service)

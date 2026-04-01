@@ -100,6 +100,19 @@ class HeatmapService:
         """
         return self._grid is not None
 
+    def has_data(self):
+        """Check whether the heatmap has meaningful density data.
+
+        Returns True only if the grid was computed and at least some AOIs
+        had valid dimensions and positions. Returns False if never computed
+        or if all AOIs were skipped due to missing dimensions/centers.
+        """
+        if self._grid is None:
+            return False
+        if self._totalAois == 0:
+            return False
+        return self._skippedAois < self._totalAois
+
     def invalidate(self):
         """Clear the cached heatmap grid."""
         self._grid = None
