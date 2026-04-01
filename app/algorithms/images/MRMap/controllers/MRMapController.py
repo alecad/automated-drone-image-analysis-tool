@@ -21,6 +21,8 @@ class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
         AlgorithmController.__init__(self, config)
         self.setupUi(self)
         self._init_combo_data()
+        self.fixComboBoxForMacOS(self.colorspaceComboBox)
+        self.fixComboBoxForMacOS(self.segmentsComboBox)
         self.thresholdSlider.valueChanged.connect(self.updatethreshold)
 
     def _init_combo_data(self):
