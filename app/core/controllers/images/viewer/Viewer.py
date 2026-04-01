@@ -26,6 +26,7 @@ from core.controllers.images.viewer.exports.CalTopoExportController import CalTo
 from core.controllers.images.viewer.exports.ZipExportController import ZipExportController
 from core.controllers.images.viewer.exports.PDFExportController import PDFExportController
 from core.controllers.images.viewer.AltitudeController import AltitudeController
+from core.controllers.images.viewer.WingtraDataController import WingtraDataController
 from core.controllers.images.viewer.image.ImageLoadController import ImageLoadController
 from core.controllers.images.viewer.PixelInfoController import PixelInfoController
 from core.controllers.images.viewer.ThermalDataController import ThermalDataController
@@ -176,6 +177,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         self.pixel_info_controller = PixelInfoController(self)
         self.image_load_controller = ImageLoadController(self)
         self.altitude_controller = AltitudeController(self)
+        self.wingtra_controller = WingtraDataController(self)
 
         # Initialize services
         self.cache_path_service = CachePathService()
@@ -790,6 +792,9 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             # Track AOI in neighboring images with 'Z' key
             if hasattr(self, 'neighbor_tracking_controller'):
                 self.neighbor_tracking_controller.track_selected_aoi()
+        if e.key() == Qt.Key_W and e.modifiers() == Qt.ShiftModifier:
+            # Load Wingtra CSV flight log with 'Shift+W' key
+            self.wingtra_controller.prompt_and_load_csv()
 
     def _backfill_image_dimensions_if_needed(self):
         """Check if image dimensions are missing and offer to backfill from image files."""
