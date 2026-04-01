@@ -1,6 +1,6 @@
 """PDFExportDialog - Pure UI dialog for collecting PDF export settings."""
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFormLayout, QCheckBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFormLayout, QCheckBox, QComboBox
 from PySide6.QtCore import Qt
 from helpers.TranslationMixin import TranslationMixin
 
@@ -64,6 +64,17 @@ class PDFExportDialog(TranslationMixin, QDialog):
         ))
         layout.addWidget(self.include_images_without_flagged_aois)
 
+        # Map tile source for overview map
+        map_tiles_layout = QHBoxLayout()
+        map_tiles_label = QLabel(self.tr("Map Tiles:"))
+        self.map_tile_source_combo = QComboBox()
+        self.map_tile_source_combo.addItem(self.tr("Map"), "map")
+        self.map_tile_source_combo.addItem(self.tr("Satellite"), "satellite")
+        self.map_tile_source_combo.setToolTip(self.tr("Choose the background tiles for the PDF overview map."))
+        map_tiles_layout.addWidget(map_tiles_label)
+        map_tiles_layout.addWidget(self.map_tile_source_combo)
+        layout.addLayout(map_tiles_layout)
+
         # Buttons
         button_layout = QHBoxLayout()
         self.ok_button = QPushButton(self.tr("OK"))
@@ -104,13 +115,15 @@ class PDFExportDialog(TranslationMixin, QDialog):
         self.organization_input.setText(settings.get('organization', ''))
         self.search_name_input.setText(settings.get('search_name', ''))
         self.include_images_without_flagged_aois.setChecked(settings.get('include_images_without_flagged_aois', False))
+        self._set_map_tile_source(settings.get('map_tile_source', 'map'))
 
     def save_settings(self):
         """Save current settings to config file."""
         self.settings_service.save_settings(
             self.organization_input.text(),
             self.search_name_input.text(),
-            self.include_images_without_flagged_aois.isChecked()
+            self.include_images_without_flagged_aois.isChecked(),
+            self.get_map_tile_source()
         )
 
     def get_organization(self):
@@ -136,3 +149,20 @@ class PDFExportDialog(TranslationMixin, QDialog):
             bool: True if images without flagged AOIs should be included
         """
         return self.include_images_without_flagged_aois.isChecked()
+
+    def get_map_tile_source(self):
+        """Get selected tile source for overview map.
+
+        Returns:
+            str: 'map' or 'satellite'
+        """
+        source = self.map_tile_source_combo.currentData()
+        return source if source in ("map", "satellite") else "map"
+
+    def _set_map_tile_source(self, source):
+        """Set selected tile source in the combobox."""
+        target = source if source in ("map", "satellite") else "map"
+        for i in range(self.map_tile_source_combo.count()):
+            if self.map_tile_source_combo.itemData(i) == target:
+                self.map_tile_source_combo.setCurrentIndex(i)
+                return

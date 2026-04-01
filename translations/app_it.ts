@@ -6482,6 +6482,26 @@ Contrassegna almeno una AOI oppure seleziona &apos;Includi immagini senza AOI co
     </message>
     <message>
         <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="69"/>
+        <source>Map Tiles:</source>
+        <translation>Tile mappa:</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="71"/>
+        <source>Map</source>
+        <translation>Mappa</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="72"/>
+        <source>Satellite</source>
+        <translation>Satellite</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="73"/>
+        <source>Choose the background tiles for the PDF overview map.</source>
+        <translation>Scegli le tile di sfondo per la mappa panoramica del PDF.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/PDFExportDialog.py" line="69"/>
         <source>OK</source>
         <translation>OK</translation>
     </message>
