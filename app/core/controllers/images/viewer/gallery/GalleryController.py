@@ -6,7 +6,6 @@ for displaying AOIs from all loaded images.
 """
 
 import colorsys
-import fnmatch
 import math
 import numpy as np
 import os
@@ -402,14 +401,16 @@ class GalleryController:
                 if not aoi.get('flagged', False):
                     continue
 
-            # Apply comment filter
+            # Apply comment filter — case-insensitive substring match. Any
+            # '*' characters are stripped so saved wildcard patterns from
+            # earlier versions (e.g. "*blue*", "crack*") keep working.
             if self.filter_comment_pattern is not None:
                 comment = aoi.get('user_comment', '').strip()
                 # Skip AOIs with empty comments when filter is active
                 if not comment:
                     continue
-                # Case-insensitive wildcard matching
-                if not fnmatch.fnmatch(comment.lower(), self.filter_comment_pattern.lower()):
+                needle = self.filter_comment_pattern.replace('*', '').lower()
+                if needle and needle not in comment.lower():
                     continue
 
             # Apply color filter

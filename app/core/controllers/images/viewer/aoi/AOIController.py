@@ -7,7 +7,6 @@ UI manipulation is handled by AOIUIComponent.
 
 import colorsys
 import cv2
-import fnmatch
 import json
 import math
 import numpy as np
@@ -410,17 +409,26 @@ class AOIController(TranslationMixin):
                         except Exception:
                             pass
 
-    def edit_aoi_comment(self, aoi_index):
+    def edit_aoi_comment(self, aoi_index, image_idx=None):
         """Open dialog to edit the comment for an AOI.
 
         Args:
             aoi_index (int): Index of the AOI to edit comment for
+            image_idx (int, optional): Index of the AOI's parent image. If
+                None, the currently displayed image is used. Gallery mode
+                passes this explicitly because the selected AOI may live on
+                a different image than the one on screen.
         """
         if aoi_index < 0:
             return
 
-        # Get current image and AOI
-        image = self.parent.images[self.parent.current_image]
+        if image_idx is None:
+            image_idx = self.parent.current_image
+
+        if image_idx < 0 or image_idx >= len(self.parent.images):
+            return
+
+        image = self.parent.images[image_idx]
         if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
             return
 
@@ -433,11 +441,20 @@ class AOIController(TranslationMixin):
         if dialog.exec():
             # User clicked OK - save the comment
             new_comment = dialog.get_comment()
-            self.save_aoi_comment_to_xml(self.parent.current_image, aoi_index, new_comment)
+            self.save_aoi_comment_to_xml(image_idx, aoi_index, new_comment)
 
-            # Refresh the AOI display to update the icon (UI component handles this)
-            if self.ui_component:
+            # Refresh the single-image AOI display if the edit was for the
+            # currently displayed image.
+            if image_idx == self.parent.current_image and self.ui_component:
                 self.ui_component.refresh_aoi_display()
+
+            # Refresh the gallery view if it exists so the comment icon
+            # state updates immediately.
+            if hasattr(self.parent, 'gallery_controller') and self.parent.gallery_controller:
+                try:
+                    self.parent.gallery_controller.refresh_gallery()
+                except Exception:
+                    pass
 
             # Show confirmation toast
             if hasattr(self.parent, 'status_controller'):
@@ -500,7 +517,7 @@ class AOIController(TranslationMixin):
                         current_gps_index
                     )
 
-    def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None, aoi_index=None):
+    def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None, aoi_index=None, image_idx=None):
         """Show context menu for AOI coordinate label with copy option.
 
         Args:
@@ -510,6 +527,8 @@ class AOIController(TranslationMixin):
             pixel_area: The area of the AOI in pixels
             avg_info: Average color/temperature information string
             aoi_index: Index of the AOI
+            image_idx: Optional parent-image index for gallery mode. None means
+                the copy will target the currently displayed image.
         """
         menu = QMenu(label_widget)
 
@@ -532,7 +551,9 @@ class AOIController(TranslationMixin):
 
         # Add copy action
         copy_action = menu.addAction(self.tr("Copy Data"))
-        copy_action.triggered.connect(lambda: self.copy_aoi_data(center, pixel_area, avg_info, aoi_index))
+        copy_action.triggered.connect(
+            lambda: self.copy_aoi_data(center, pixel_area, avg_info, aoi_index, image_idx=image_idx)
+        )
 
         # Get the current cursor position (global coordinates)
         global_pos = QCursor.pos()
@@ -540,7 +561,7 @@ class AOIController(TranslationMixin):
         # Show menu at cursor position
         menu.exec(global_pos)
 
-    def copy_aoi_data(self, center, pixel_area, avg_info=None, aoi_index=None):
+    def copy_aoi_data(self, center, pixel_area, avg_info=None, aoi_index=None, image_idx=None):
         """Copy AOI data to clipboard including image name, coordinates, and GPS.
 
         Args:
@@ -548,13 +569,38 @@ class AOIController(TranslationMixin):
             pixel_area: The area of the AOI in pixels
             avg_info: Average color/temperature information string
             aoi_index: Index of the AOI
+            image_idx: Optional parent-image index. If None, uses the currently
+                displayed image. Gallery mode passes this explicitly so AOIs
+                from images other than the one on screen can be copied.
         """
-        # Get current image information
-        image = self.parent.images[self.parent.current_image]
+        if image_idx is None:
+            image_idx = self.parent.current_image
+
+        if image_idx < 0 or image_idx >= len(self.parent.images):
+            return
+
+        # Get image information
+        image = self.parent.images[image_idx]
         image_name = image.get('name', 'Unknown')
 
-        # Get image GPS coordinates if available
-        image_gps_coords = self.parent.messages.get('GPS Coordinates', 'N/A')
+        # Get image GPS coordinates. For the currently displayed image the
+        # viewer already has a formatted string cached in self.parent.messages;
+        # for any other image we compute it from EXIF so gallery copies produce
+        # the same output.
+        if image_idx == self.parent.current_image:
+            image_gps_coords = self.parent.messages.get('GPS Coordinates', 'N/A')
+        else:
+            image_gps_coords = 'N/A'
+            try:
+                img_service = AOIService(image).image_service
+                gps_exif = LocationInfo.get_gps(exif_data=img_service.exif_data)
+                if gps_exif:
+                    position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
+                    image_gps_coords = LocationInfo.format_coordinates(
+                        gps_exif['latitude'], gps_exif['longitude'], position_format
+                    )
+            except Exception as e:
+                self.logger.error(f"Error reading image GPS for clipboard copy: {e}")
 
         # Get user comment if available
         user_comment = ""
@@ -564,7 +610,7 @@ class AOIController(TranslationMixin):
                 user_comment = aoi.get('user_comment', '')
 
         # Calculate AOI GPS coordinates with metadata
-        gps_result = self.calculate_aoi_gps(aoi_index, return_metadata=True)
+        gps_result = self.calculate_aoi_gps(aoi_index, return_metadata=True, image_idx=image_idx)
 
         if gps_result:
             aoi_gps_coords = gps_result['coords_text']
@@ -607,12 +653,14 @@ class AOIController(TranslationMixin):
         if hasattr(self.parent, 'status_controller'):
             self.parent.status_controller.show_toast(self.tr("AOI data copied"), 2000, color="#00C853")
 
-    def calculate_aoi_gps(self, aoi_index, return_metadata=False):
+    def calculate_aoi_gps(self, aoi_index, return_metadata=False, image_idx=None):
         """Calculate GPS coordinates for a specific AOI.
 
         Args:
             aoi_index: Index of the AOI
             return_metadata: If True, return dict with coordinates and elevation source info
+            image_idx: Optional parent-image index. If None, uses the currently
+                displayed image. Gallery mode passes this explicitly.
 
         Returns:
             If return_metadata=False: String with formatted GPS coordinates or "N/A"
@@ -622,8 +670,13 @@ class AOIController(TranslationMixin):
             if aoi_index is None or aoi_index < 0:
                 return "N/A" if not return_metadata else None
 
-            # Get current image and AOI
-            image = self.parent.images[self.parent.current_image]
+            if image_idx is None:
+                image_idx = self.parent.current_image
+
+            if image_idx < 0 or image_idx >= len(self.parent.images):
+                return "N/A" if not return_metadata else None
+
+            image = self.parent.images[image_idx]
             if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
                 return "N/A" if not return_metadata else None
 
@@ -977,12 +1030,15 @@ class AOIController(TranslationMixin):
             if self.filter_area_max is not None and area > self.filter_area_max:
                 continue
 
-            # Apply comment filter
+            # Apply comment filter — case-insensitive substring match.
+            # Any '*' characters are stripped so saved wildcard patterns from
+            # earlier versions (e.g. "*blue*", "crack*") keep working.
             if self.filter_comment_pattern is not None:
                 comment = aoi.get('user_comment', '').strip()
                 if not comment:
                     continue
-                if not fnmatch.fnmatch(comment.lower(), self.filter_comment_pattern.lower()):
+                needle = self.filter_comment_pattern.replace('*', '').lower()
+                if needle and needle not in comment.lower():
                     continue
 
             # Apply temperature filter (in Celsius)

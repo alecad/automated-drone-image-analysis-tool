@@ -852,9 +852,24 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             # Upscale currently visible portion with 'E' key
             self._open_upscale_dialog()
         if e.key() == Qt.Key_Z and e.modifiers() == Qt.NoModifier:
-            # Track AOI in neighboring images with 'Z' key
+            # Track AOI in neighboring images with 'Z' key. In gallery mode
+            # the selection lives in the gallery model, which may span images,
+            # so resolve it there and pass explicit indices to the tracker.
             if hasattr(self, 'neighbor_tracking_controller'):
-                self.neighbor_tracking_controller.track_selected_aoi()
+                if (hasattr(self, 'gallery_mode') and self.gallery_mode and
+                        hasattr(self, 'gallery_controller') and self.gallery_controller):
+                    ui_component = self.gallery_controller.ui_component
+                    if ui_component and ui_component.gallery_view:
+                        current_index = ui_component.gallery_view.currentIndex()
+                        if current_index.isValid():
+                            aoi_info = self.gallery_controller.model.get_aoi_info(current_index)
+                            if aoi_info:
+                                image_idx, aoi_idx, _ = aoi_info
+                                self.neighbor_tracking_controller.track_selected_aoi(
+                                    image_idx=image_idx, aoi_idx=aoi_idx
+                                )
+                else:
+                    self.neighbor_tracking_controller.track_selected_aoi()
         if e.key() == Qt.Key_W and e.modifiers() == Qt.ShiftModifier:
             # Load Wingtra CSV flight log with 'Shift+W' key
             self.wingtra_controller.prompt_and_load_csv()
