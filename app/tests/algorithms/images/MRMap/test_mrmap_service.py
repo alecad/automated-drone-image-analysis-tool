@@ -94,6 +94,66 @@ def test_process_image(mrmap_service, test_image):
         assert result.error_message is None
 
 
+def test_mask_contains_only_flagged_pixels():
+    """Mask must contain only actually flagged pixels, not filled bounding rectangles."""
+    options = {'threshold': 95, 'segments': 1, 'window': 5, 'colorspace': 'RGB'}
+    service = MRMapService(
+        identifier=(255, 0, 0),
+        min_area=3,
+        max_area=0,
+        aoi_radius=0,
+        combine_aois=False,
+        options=options,
+    )
+
+    pixel_anom = np.zeros((50, 50), dtype=bool)
+    sparse_coords = [(10, 10), (12, 10), (14, 12), (10, 14), (14, 14)]
+    for x, y in sparse_coords:
+        pixel_anom[y, x] = True
+
+    mask, clusters = service._getMRMapsContours(pixel_anom)
+
+    assert len(clusters) == 1
+    assert len(clusters[0]['pixels']) == len(sparse_coords)
+    assert int(mask.sum() // 255) == len(sparse_coords)
+    for x, y in sparse_coords:
+        assert mask[y, x] == 255
+
+    bounding_area = (14 - 10 + 1) * (14 - 10 + 1)
+    assert int(mask.sum() // 255) < bounding_area
+
+
+def test_build_aois_from_scattered_cluster():
+    """A scattered BFS cluster must produce exactly one AOI with actual pixels."""
+    options = {'threshold': 95, 'segments': 1, 'window': 5, 'colorspace': 'RGB'}
+    service = MRMapService(
+        identifier=(255, 0, 0),
+        min_area=3,
+        max_area=0,
+        aoi_radius=2,
+        combine_aois=False,
+        options=options,
+    )
+
+    sparse_coords = [(10, 10), (12, 10), (14, 12), (10, 14), (14, 14)]
+    pixel_anom = np.zeros((50, 50), dtype=bool)
+    for x, y in sparse_coords:
+        pixel_anom[y, x] = True
+
+    mask, clusters = service._getMRMapsContours(pixel_anom)
+    aois, base_count = service._build_aois_from_clusters(clusters, (50, 50, 3))
+
+    assert base_count == 1
+    assert len(aois) == 1
+    aoi = aois[0]
+    assert aoi['area'] == len(sparse_coords)
+    assert len(aoi['detected_pixels']) == len(sparse_coords)
+    returned = {tuple(p) for p in aoi['detected_pixels']}
+    expected = set(sparse_coords)
+    assert returned == expected
+    assert len(aoi['contour']) == 4  # rectangle corners
+
+
 def test_add_confidence_scores(mrmap_service):
     """Test adding confidence scores to AOIs."""
     areas_of_interest = [

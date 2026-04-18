@@ -83,12 +83,9 @@ class MRMapService(AlgorithmService):
             # Identify anomalous pixels
             pixel_anom = (0 < bin_counts) & (bin_counts < self.threshold)
 
-            mask, contours = self._getMRMapsContours(pixel_anom)
+            mask, clusters = self._getMRMapsContours(pixel_anom)
 
-            # Identify contours in the masked image
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-            areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
+            areas_of_interest, base_contour_count = self._build_aois_from_clusters(clusters, img.shape)
 
             # Add confidence scores to AOIs based on bin counts (rarity scores)
             if areas_of_interest:
@@ -121,43 +118,48 @@ class MRMapService(AlgorithmService):
         return contours
 
     def _getMRMapsContours(self, pixel_anom):
-        """Get contours from pixel anomaly mask using MRMap-specific method.
+        """Build detection mask and cluster list from a pixel anomaly mask.
 
-        Uses connected component analysis with window-based connectivity
-        to merge nearby anomalies into rectangles.
+        Uses BFS connected component analysis with window-based connectivity
+        to group nearby anomalous pixels into clusters. Clusters whose
+        bounding rectangles overlap are merged by concatenating their pixel
+        lists. The returned mask contains only the actual flagged pixels of
+        valid clusters — not filled bounding rectangles.
 
         Args:
             pixel_anom: Boolean array indicating anomalous pixels.
 
         Returns:
-            Tuple of (mask, contours) where mask is the combined mask and
-            contours is the list of contours.
+            Tuple of (mask, clusters) where mask is a uint8 mask (255 on
+            actual flagged pixels of valid clusters) and clusters is a list
+            of dicts: {'rect': [xmin, ymin, xmax, ymax], 'pixels': [(x, y), ...]}.
         """
         visited = np.zeros_like(pixel_anom, dtype=bool)
-        anomaly_rectangles = []
+        clusters = []
         mask = np.zeros_like(pixel_anom, dtype=np.uint8)
         height, width = pixel_anom.shape
 
         for y, x in zip(*np.where(pixel_anom & ~visited)):
-            count, rect = self._find_connected_pixels(pixel_anom, visited, x, y, width, height)
+            count, rect, pixels = self._find_connected_pixels(pixel_anom, visited, x, y, width, height)
             if count >= self.min_area:
                 merged = False
-                for i, existing_rect in enumerate(anomaly_rectangles):
-                    if self._rectangles_overlap(existing_rect, rect):
-                        anomaly_rectangles[i] = self._merge_rectangles(existing_rect, rect)
+                for i, existing in enumerate(clusters):
+                    if self._rectangles_overlap(existing['rect'], rect):
+                        existing['rect'] = self._merge_rectangles(existing['rect'], rect)
+                        existing['pixels'].extend(pixels)
                         merged = True
                         break
 
                 if not merged:
-                    anomaly_rectangles.append(rect)
+                    clusters.append({'rect': rect, 'pixels': pixels})
 
-        # Draw all combined rectangles
-        for rect in anomaly_rectangles:
-            mask[rect[1]:rect[3] + 1, rect[0]:rect[2] + 1] = 255
+        # Mark only the actual flagged pixels in the mask (not rectangles)
+        for cluster in clusters:
+            if cluster['pixels']:
+                coords = np.asarray(cluster['pixels'])
+                mask[coords[:, 1], coords[:, 0]] = 255
 
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-        return mask, contours
+        return mask, clusters
 
     def _find_connected_pixels(self, pixel_anom, visited, start_x, start_y, width, height):
         """Find connected pixels using BFS with window-based connectivity.
@@ -171,12 +173,15 @@ class MRMapService(AlgorithmService):
             height: Image height.
 
         Returns:
-            Tuple of (count, rect) where count is the number of connected
-            pixels and rect is [min_x, min_y, max_x, max_y].
+            Tuple of (count, rect, pixels) where count is the number of
+            connected pixels, rect is [min_x, min_y, max_x, max_y], and
+            pixels is a list of (x, y) tuples for every flagged pixel in
+            the cluster.
         """
         queue = deque([(start_x, start_y)])
         rect = [start_x, start_y, start_x, start_y]
         count = 0
+        pixels = []
 
         while queue:
             x, y = queue.popleft()
@@ -186,6 +191,7 @@ class MRMapService(AlgorithmService):
 
             visited[y, x] = True
             count += 1
+            pixels.append((x, y))
             rect[0] = min(rect[0], x)
             rect[1] = min(rect[1], y)
             rect[2] = max(rect[2], x)
@@ -203,7 +209,7 @@ class MRMapService(AlgorithmService):
             for dy, dx in neighbors:
                 queue.append((x_range[0] + dx, y_range[0] + dy))
 
-        return count, rect
+        return count, rect, pixels
 
     def _merge_rectangles(self, rect1, rect2):
         """Merge two overlapping rectangles into one.
@@ -238,6 +244,123 @@ class MRMapService(AlgorithmService):
             rect1[3] < rect2[1] or  # rect1 bottom < rect2 top
             rect1[1] > rect2[3]     # rect1 top > rect2 bottom
         )
+
+    def _build_aois_from_clusters(self, clusters, img_shape):
+        """Build AOI dictionaries directly from BFS clusters.
+
+        Replaces the generic contour-based identify_areas_of_interest for
+        MRMap so that AOI geometry and detected_pixels are driven by the
+        actual flagged pixels rather than filled bounding rectangles. Each
+        cluster becomes exactly one AOI (before optional circle-based
+        combining).
+
+        Args:
+            clusters: List of cluster dicts from _getMRMapsContours.
+                Each has 'rect' and 'pixels' keys.
+            img_shape: Shape of the processing-resolution image (H, W[, C]).
+
+        Returns:
+            Tuple of (areas_of_interest, base_contour_count). Returns
+            (None, None) when no clusters pass filtering, mirroring
+            AlgorithmService.identify_areas_of_interest behavior.
+        """
+        if not clusters:
+            return None, None
+
+        height, width = int(img_shape[0]), int(img_shape[1])
+
+        # Build a mask of all actual-flagged pixels — used later for
+        # bitwise_and intersection when combine_aois merges AOIs.
+        original_pixels_mask = np.zeros((height, width), dtype=np.uint8)
+
+        base_aois = []
+        temp_mask = np.zeros((height, width), dtype=np.uint8)
+
+        for cluster in clusters:
+            pixels = cluster['pixels']
+            area = len(pixels)
+            if area < self.min_area:
+                continue
+            if self.max_area > 0 and area > self.max_area:
+                continue
+
+            coords = np.asarray(pixels)  # shape (N, 2), columns are (x, y)
+            original_pixels_mask[coords[:, 1], coords[:, 0]] = 255
+
+            # minEnclosingCircle expects a contour-like (N, 1, 2) array
+            contour_pts = coords.reshape(-1, 1, 2).astype(np.int32)
+            (cx, cy), radius = cv2.minEnclosingCircle(contour_pts)
+            center = (int(cx), int(cy))
+            radius = int(radius) + self.aoi_radius
+
+            xmin, ymin, xmax, ymax = cluster['rect']
+            contour_rect = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
+
+            base_aois.append({
+                'center': center,
+                'radius': radius,
+                'area': area,
+                'contour': contour_rect,
+                'detected_pixels': coords.tolist(),
+            })
+
+            # Stamp the expanded circle onto temp_mask for the optional
+            # combine_aois pass below.
+            cv2.circle(temp_mask, center, radius, 255, -1)
+
+        if not base_aois:
+            return None, None
+
+        base_contour_count = len(base_aois)
+
+        if not self.combine_aois:
+            base_aois.sort(key=lambda item: (item['center'][1], item['center'][0]))
+            return base_aois, base_contour_count
+
+        # combine_aois: iteratively stamp circles onto temp_mask until the
+        # number of external contours stabilizes, then build merged AOIs.
+        combined_contours, _ = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        while True:
+            for cnt in combined_contours:
+                (mx, my), mradius = cv2.minEnclosingCircle(cnt)
+                cv2.circle(temp_mask, (int(mx), int(my)), int(mradius), 255, -1)
+            next_contours, _ = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            if len(next_contours) == len(combined_contours):
+                combined_contours = next_contours
+                break
+            combined_contours = next_contours
+
+        combined_aois = []
+        for cnt in combined_contours:
+            region_mask = np.zeros((height, width), dtype=np.uint8)
+            cv2.drawContours(region_mask, [cnt], -1, 255, thickness=-1)
+
+            # Intersect the combined region with the actual flagged pixels
+            # so detected_pixels and area reflect true anomalies only.
+            aoi_pixels_mask = cv2.bitwise_and(original_pixels_mask, region_mask)
+            ys, xs = np.where(aoi_pixels_mask > 0)
+            if len(xs) == 0:
+                continue
+            aoi_pixels = np.stack([xs, ys], axis=1)
+
+            (cx, cy), radius = cv2.minEnclosingCircle(cnt)
+            center = (int(cx), int(cy))
+            radius = int(radius)
+
+            xmin, ymin = int(xs.min()), int(ys.min())
+            xmax, ymax = int(xs.max()), int(ys.max())
+            contour_rect = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
+
+            combined_aois.append({
+                'center': center,
+                'radius': radius,
+                'area': int(len(aoi_pixels)),
+                'contour': contour_rect,
+                'detected_pixels': aoi_pixels.tolist(),
+            })
+
+        combined_aois.sort(key=lambda item: (item['center'][1], item['center'][0]))
+        return combined_aois, base_contour_count
 
     def _add_confidence_scores(self, areas_of_interest, bin_counts, mask):
         """Add confidence scores to AOIs based on histogram bin counts (rarity scores).
