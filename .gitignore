@@ -52,6 +52,7 @@ app/core/views/components/*_fixed.py
 
 # Documentation generated during development
 MOTION_DETECTION_GUIDE.md
+docs/
 app/algorithms/AIPersonDetector/services/best_mixed_logged.onnx
 app/tests/data.zip
 app/algorithms/images/AIPersonDetector/services/best_mixed_logged.onnx
