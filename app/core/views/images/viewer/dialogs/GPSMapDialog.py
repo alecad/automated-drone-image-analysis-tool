@@ -42,9 +42,10 @@ class GPSMapDialog(TranslationMixin, QDialog):
         self.setWindowTitle(self.tr("GPS Map View"))
         self.setModal(False)  # Non-modal so user can interact with main window
 
-        # Set window flags to keep dialog on top (especially important on macOS)
-        # Use WindowStaysOnTopHint to keep it visible when clicking on parent window
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        # Use Qt.Tool so the dialog floats above its parent viewer but not
+        # above unrelated OS apps, and so modal children of the viewer (e.g.
+        # comment/creation dialogs) are not covered by the map.
+        self.setWindowFlags(self.windowFlags() | Qt.Tool)
 
         self.resize(800, 600)
 
@@ -104,6 +105,10 @@ class GPSMapDialog(TranslationMixin, QDialog):
         self.fit_btn.clicked.connect(self.map_view.fit_all_points)
         controls_layout.addWidget(self.fit_btn)
 
+        self.rotate_btn = QPushButton(self.tr("Rotate (R)"))
+        self.rotate_btn.clicked.connect(self.map_view.toggle_rotation)
+        controls_layout.addWidget(self.rotate_btn)
+
         # Add separator
         controls_layout.addSpacing(20)
 
@@ -135,6 +140,10 @@ class GPSMapDialog(TranslationMixin, QDialog):
 
         # Fit all
         QShortcut(QKeySequence(Qt.Key.Key_F), self, self.map_view.fit_all_points)
+
+        # Rotate (toggle north-up / bearing-aligned). Registered at the dialog
+        # level so the shortcut fires regardless of which child widget has focus.
+        QShortcut(QKeySequence(Qt.Key.Key_R), self, self.map_view.toggle_rotation)
 
         # Arrow keys for panning
         QShortcut(QKeySequence(Qt.Key.Key_Left), self, lambda: self.map_view.pan(-50, 0))

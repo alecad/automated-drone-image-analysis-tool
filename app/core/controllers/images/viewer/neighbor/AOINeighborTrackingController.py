@@ -88,30 +88,43 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
         # Dialog for displaying results
         self._gallery_dialog = None
 
-    def track_selected_aoi(self):
+    def track_selected_aoi(self, image_idx=None, aoi_idx=None):
         """
-        Track the currently selected AOI across neighboring images.
+        Track a selected AOI across neighboring images.
 
-        This method is triggered by the Z key.
+        Triggered by the Z key. When called with no arguments, the AOI is read
+        from the single-image AOIController. When called with explicit
+        `image_idx` / `aoi_idx`, those are used directly — this is the path
+        used from gallery mode, where the selected AOI may belong to an image
+        other than the one currently displayed in the main viewer.
         """
         try:
-            # Get the currently selected AOI
-            aoi_controller = self.parent.aoi_controller
-            selected_aoi = aoi_controller.get_selected_aoi()
+            if image_idx is not None and aoi_idx is not None:
+                # Gallery-mode selection: resolve AOI from explicit indices
+                if image_idx < 0 or image_idx >= len(self.parent.images):
+                    return
+                current_image = self.parent.images[image_idx]
+                aois = current_image.get('areas_of_interest', [])
+                if aoi_idx < 0 or aoi_idx >= len(aois):
+                    return
+                aoi_data = aois[aoi_idx]
+                current_image_idx = image_idx
+            else:
+                # Single-image selection: read from the AOIController
+                aoi_controller = self.parent.aoi_controller
+                selected_aoi = aoi_controller.get_selected_aoi()
 
-            if not selected_aoi:
-                QMessageBox.information(
-                    self.parent,
-                    self.tr("No AOI Selected"),
-                    self.tr("Please select an AOI first by clicking on it in the thumbnail panel.")
-                )
-                return
+                if not selected_aoi:
+                    QMessageBox.information(
+                        self.parent,
+                        self.tr("No AOI Selected"),
+                        self.tr("Please select an AOI first by clicking on it in the thumbnail panel.")
+                    )
+                    return
 
-            aoi_data, aoi_index = selected_aoi
-
-            # Get the current image
-            current_image_idx = self.parent.current_image
-            current_image = self.parent.images[current_image_idx]
+                aoi_data, _ = selected_aoi
+                current_image_idx = self.parent.current_image
+                current_image = self.parent.images[current_image_idx]
 
             # Get altitude override if set
             agl_override_m = None
@@ -120,11 +133,21 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
                 if alt_ft and alt_ft > 0:
                     agl_override_m = alt_ft * 0.3048
 
-            # Calculate the GPS coordinates of the selected AOI
-            aoi_service = AOIService(current_image, self.parent.current_image_array)
-            aoi_gps = aoi_service.estimate_aoi_gps(current_image, aoi_data, agl_override_m)
+            # Only reuse the viewer's cached pixel array when we're tracking
+            # an AOI on the currently-displayed image; otherwise let
+            # ImageService load the correct image from disk.
+            if current_image_idx == self.parent.current_image:
+                img_array = self.parent.current_image_array
+            else:
+                img_array = None
 
-            if not aoi_gps:
+            # Calculate the GPS coordinates of the selected AOI.
+            # estimate_aoi_gps returns an AOIGPSResult dataclass; the neighbor
+            # service expects a plain (lat, lon) tuple, so convert here.
+            aoi_service = AOIService(current_image, img_array)
+            aoi_gps_result = aoi_service.estimate_aoi_gps(current_image, aoi_data, agl_override_m)
+
+            if not aoi_gps_result:
                 QMessageBox.warning(
                     self.parent,
                     self.tr("Cannot Calculate GPS"),
@@ -134,6 +157,8 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
                     )
                 )
                 return
+
+            aoi_gps = aoi_gps_result.to_tuple()
 
             # Show progress dialog
             self.progress_dialog = QProgressDialog(

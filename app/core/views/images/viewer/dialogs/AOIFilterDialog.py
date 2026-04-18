@@ -122,7 +122,7 @@ class AOIFilterDialog(TranslationMixin, QDialog):
         pattern_layout.addWidget(QLabel(self.tr("Pattern:")))
 
         self.comment_pattern_input = QLineEdit()
-        self.comment_pattern_input.setPlaceholderText(self.tr("e.g., *work* or crack* or *damage"))
+        self.comment_pattern_input.setPlaceholderText(self.tr("e.g., damage or crack"))
         if self.comment_filter:
             self.comment_pattern_input.setText(self.comment_filter)
         pattern_layout.addWidget(self.comment_pattern_input)
@@ -130,7 +130,7 @@ class AOIFilterDialog(TranslationMixin, QDialog):
         comment_layout.addLayout(pattern_layout)
 
         # Info labels
-        info_label1 = QLabel(self.tr("Use * as wildcard for any characters (case-insensitive)"))
+        info_label1 = QLabel(self.tr("Case-insensitive substring match (e.g. \"blue\" matches \"blueface\")"))
         info_label1.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
         comment_layout.addWidget(info_label1)
 
